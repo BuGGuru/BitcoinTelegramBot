@@ -5,7 +5,6 @@ from time import sleep
 import configparser
 import requests
 
-
 #############
 ## Configs ##
 #############
@@ -13,10 +12,8 @@ import requests
 config = configparser.RawConfigParser()
 config.read('config.cfg')
 
-## Bot
+## Config-Import
 bot_token = config.get('BOT', 'token')
-
-## Chats
 chat_id = config.get('CHAT', 'chat_id')
 
 ## Basics
@@ -26,6 +23,7 @@ divider = 25
 #####################
 ## Price variables ##
 #####################
+
 previous_eur = 0
 previous_usd = 0
 price_level = 0
@@ -126,7 +124,7 @@ while True:
             ## Check if new price level is in history
             if not new_usd_level in history:
                 ## Check if price is higher or lower
-                if price_level > new_usd_level:
+                if announced_price > new_usd:
                     priceIs = "lower"
                 else:
                     priceIs = "higher"
@@ -142,7 +140,7 @@ while True:
             elif (sum(history)/len(history)) == new_usd_level:
 
                 ## Check if price is higher or lower
-                if price_level > new_usd_level:
+                if announced_price > new_usd:
                     priceIs = "lower"
                 else:
                     priceIs = "higher"
