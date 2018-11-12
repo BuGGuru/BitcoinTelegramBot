@@ -184,7 +184,10 @@ while True:
         bot_messages_json = bot_messages.json()
 
         ### Check the amount of messages received
-        message_amount = len(bot_messages_json["result"])
+        try:
+            message_amount = len(bot_messages_json["result"])
+        except KeyError:
+            message_amount = 0
 
         ## Check messages if exists
         if message_amount != 0:
