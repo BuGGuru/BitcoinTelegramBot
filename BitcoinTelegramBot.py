@@ -10,15 +10,16 @@ import requests
 #############
 
 config = configparser.RawConfigParser()
-config.read('config.cfg')
+config.read("./config.cfg")
 
 ## Config-Import
-bot_token = config.get('BOT', 'token')
-chat_id = config.get('CHAT', 'chat_id')
+bot_token = config.get("BOT", "token")
+chat_id = config.get("CHAT", "chat_id")
 
 ## Basics
-history_length = 5
-divider = 25
+history_length = 15
+divider = 100
+interval_check = False
 
 #####################
 ## Price variables ##
@@ -26,8 +27,7 @@ divider = 25
 
 previous_eur = 0
 previous_usd = 0
-price_level = 0
-interval_check = 0
+interval_count = 0
 announced_price = 0
 history = []
 
@@ -35,7 +35,8 @@ history = []
 ## Bot variables ##
 ###################
 
-offset = ""
+offset = "-0"
+restarted = True
 
 ####################
 ## Price methods  ##
@@ -44,17 +45,23 @@ offset = ""
 ## Get the prices from the api
 def get_latest_bitcoin_price(currency):
     if currency == "usd":
-        response = requests.get("https://api.coindesk.com/v1/bpi/currentprice/USD.json")
+        response = requests.get("https://api.coindesk.com/v1/bpi/currentprice/USD.json", verify=False)
         response_json = response.json()
         return int(response_json["bpi"]["USD"]["rate_float"])
     else:
-        response = requests.get("https://api.coindesk.com/v1/bpi/currentprice/EUR.json")
+        response = requests.get("https://api.coindesk.com/v1/bpi/currentprice/EUR.json", verify=False)
         response_json = response.json()
         return int(response_json["bpi"]["EUR"]["rate_float"])
 
 ##################
 ## Bot methods  ##
 ##################
+
+## Get updates from bot
+def get_messages(offset):
+    offset_url = "https://api.telegram.org/bot" + str(bot_token) + "/getUpdates?offset=" + offset
+    bot_messages = requests.get(offset_url)
+    return bot_messages.json()
 
 ## Send message to a chat
 def send_message(chat, message):
@@ -64,15 +71,18 @@ def send_message(chat, message):
 ## Pre-warm Bot ##
 ##################
 
-## Set the price level an fill the history
+## Set the price level and fill the history
 price_level = int(get_latest_bitcoin_price("usd")/divider)
 while len(history) < history_length:
     history.append(price_level)
 
 ## discard old messages
-##########
-## todo ##
-##########
+discard_messages = get_messages(offset)
+
+## send out restart message
+message = "The Bot restarted"
+print(message)
+send_message(chat_id, message)
 
 ###############
 ## Main loop ##
@@ -91,11 +101,11 @@ while True:
     if new_eur < previous_eur:
         change_eur = new_eur - previous_eur
         previous_eur = new_eur
-        print("Price change: New price is",get_latest_bitcoin_price("eur"),"EUR and changed", change_eur, "EUR", "-- DOWN")
+        print("Price change: New price is", get_latest_bitcoin_price("eur"), "EUR and changed", change_eur, "EUR", "-- DOWN")
     elif new_eur > previous_eur:
         change_eur = new_eur - previous_eur
         previous_eur = new_eur
-        print("Price change: New price is",get_latest_bitcoin_price("eur"),"EUR and changed", change_eur, "EUR", "-- UP")
+        print("Price change: New price is", get_latest_bitcoin_price("eur"), "EUR and changed", change_eur, "EUR", "-- UP")
     else:
         change_eur = 0
 
@@ -106,11 +116,11 @@ while True:
     if new_usd < previous_usd:
         change_usd = new_usd - previous_usd
         previous_usd = new_usd
-        print("Price change: New price is",get_latest_bitcoin_price("usd"),"USD and changed", change_usd, "USD", "-- DOWN")
+        print("Price change: New price is", get_latest_bitcoin_price("usd"), "USD and changed", change_usd, "USD", "-- DOWN")
     elif new_usd > previous_usd:
         change_usd = new_usd - previous_usd
         previous_usd = new_usd
-        print("Price change: New price is",get_latest_bitcoin_price("usd"), "USD and changed", change_usd, "USD", "-- UP" )
+        print("Price change: New price is", get_latest_bitcoin_price("usd"), "USD and changed", change_usd, "USD", "-- UP" )
     else:
         change_usd = 0
 
@@ -125,12 +135,12 @@ while True:
             if not new_usd_level in history:
                 ## Check if price is higher or lower
                 if announced_price > new_usd:
-                    priceIs = "lower"
+                    priceIs = "Lower"
                 else:
-                    priceIs = "higher"
+                    priceIs = "Higher"
 
                 ## Announce since price not in history
-                message = "New price level - " + str(new_usd_level*divider) + " - price is now " + priceIs + " at " + str(new_usd) + " USD"
+                message = priceIs + " price level: " + str(new_usd_level * divider) + " - " + str(new_usd_level * divider + divider)
                 print(message)
                 send_message(chat_id, message)
                 price_level = new_usd_level
@@ -141,12 +151,12 @@ while True:
 
                 ## Check if price is higher or lower
                 if announced_price > new_usd:
-                    priceIs = "lower"
+                    priceIs = "Lower"
                 else:
-                    priceIs = "higher"
+                    priceIs = "Higher"
 
                 ## Announce since price is stable
-                message = "New price level - " + str(new_usd_level*divider) + " - stable price is now " + priceIs + " at " + str(new_usd) + " USD"
+                message = priceIs + " price level: " + str(new_usd_level * divider) + " - " + str(new_usd_level * divider + divider)
                 print(message)
                 send_message(chat_id, message)
                 price_level = new_usd_level
@@ -164,12 +174,13 @@ while True:
     ## Interval check ##
     #####################
 
-    interval_check = interval_check + 1
-    if interval_check == 60:
+    if interval_count == 60:
         message = "Interval check - the price is " + str(new_usd) + " USD"
         print(message)
-        #send_message(myself, message)
-        interval_check = 0
+        if interval_check:
+            send_message(chat_id, message)
+        interval_count = 0
+    interval_count = interval_count + 1
 
     #####################
     ## Chat monitoring ##
@@ -179,9 +190,7 @@ while True:
     mon_loop = 0
     while mon_loop < 6:
         ## Get updates from bot
-        offset_url = "https://api.telegram.org/bot" + str(bot_token) + "/getUpdates?offset=" + offset
-        bot_messages = requests.get(offset_url)
-        bot_messages_json = bot_messages.json()
+        bot_messages_json = get_messages(offset)
 
         ### Check the amount of messages received
         try:
@@ -220,7 +229,7 @@ while True:
                 except KeyError:
                     print("Maybe edited message received")
 
-            ## Acknowledge messages
+            ## Set new offset to acknowledge messages
             offset = str(bot_messages_json["result"][message_amount - 1]["update_id"] + 1)
 
         mon_loop = mon_loop + 1
