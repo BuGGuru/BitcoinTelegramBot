@@ -36,7 +36,7 @@ history = []
 ###################
 
 offset = "-0"
-restarted = True
+ask_price_steps = False
 
 ####################
 ## Price methods  ##
@@ -211,21 +211,36 @@ while True:
                     print("New Message: " + bot_messages_text_single)
 
                     ## Check for commands
-                    splitted = bot_messages_text_single.split(';')
-                    if splitted[0] == "show settings":
+                    splitted = bot_messages_text_single.split(' ')
+                    if splitted[0] == "/show_settings":
                         message = "Price steps are " + str(divider) + " and the price is stable after " + str(history_length) + " minutes"
                         print(message)
                         send_message(chat_id, message)
-                    if splitted[0] == "set settings":
+                    if splitted[0] == "/set_price_steps":
+                        if len(splitted) > 1:
+                            try:
+                                divider = int(splitted[1])
+                                message = "Set the price stepping to " + str(splitted[1])
+                                print(message)
+                                send_message(chat_id, message)
+                                mon_loop = 50
+                            except ValueError:
+                                ask_price_steps = True
+                        else:
+                            ask_price_steps = True
+                    if ask_price_steps:
                         try:
-                            divider = int(splitted[1])
-                            message = "Set the price stepping to " + str(splitted[1])
+                            divider = int(splitted[0])
+                            message = "Set the price stepping to " + str(splitted[0])
                             print(message)
+                            send_message(chat_id, message)
                             mon_loop = 50
+                            ask_price_steps = False
                         except ValueError:
-                            message = "Invalid value for price stepping - has to be integer"
+                            ask_price_steps = True
+                            message = "Tell me your desired price steps in USD as integer"
+                            send_message(chat_id, message)
                             print(message)
-                        send_message(chat_id, message)
                 except KeyError:
                     print("Maybe edited message received")
 
