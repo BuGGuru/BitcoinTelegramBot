@@ -9,17 +9,22 @@ import requests
 ## Configs ##
 #############
 
+## Import the configs from file
 config = configparser.RawConfigParser()
 config.read("./config.cfg")
 
-## Config-Import
+## Set configs
 bot_token = config.get("BOT", "token")
 chat_id = config.get("CHAT", "chat_id")
-
-## Basics
 history_length = int(config.get("BOT", "history_length"))
 divider = int(config.get("BOT", "divider"))
-interval_check = False
+interval_check = config.get("BOT", "interval_check")
+
+## Convert String to bool for interval check
+if interval_check == "True":
+    interval_check = True
+else:
+    interval_check = False
 
 #####################
 ## Price variables ##
