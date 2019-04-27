@@ -17,8 +17,8 @@ bot_token = config.get("BOT", "token")
 chat_id = config.get("CHAT", "chat_id")
 
 ## Basics
-history_length = 15
-divider = 100
+history_length = int(config.get("BOT", "history_length"))
+divider = int(config.get("BOT", "divider"))
 interval_check = False
 
 #####################
@@ -220,6 +220,7 @@ while True:
                         if len(splitted) > 1:
                             try:
                                 divider = int(splitted[1])
+                                config.set('BOT', 'divider', divider)
                                 message = "Set the price stepping to " + str(splitted[1])
                                 print(message)
                                 send_message(chat_id, message)
@@ -231,6 +232,7 @@ while True:
                     if ask_price_steps:
                         try:
                             divider = int(splitted[0])
+                            config.set('BOT', 'divider', divider)
                             message = "Set the price stepping to " + str(splitted[0])
                             print(message)
                             send_message(chat_id, message)
@@ -247,6 +249,11 @@ while True:
             ## Set new offset to acknowledge messages
             offset = str(bot_messages_json["result"][message_amount - 1]["update_id"] + 1)
 
+        ## Write new configs to file
+        with open('config.cfg', 'w') as configfile:
+            config.write(configfile)
+
+        ## Loop things
         mon_loop = mon_loop + 1
         sleep(10)
         #####################

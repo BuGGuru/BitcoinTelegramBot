@@ -1,5 +1,7 @@
 [BOT]
 bot_token = [YOUR TELEGRAM BOT TOKEN]
+history_length = 15
+divider = 100
 
 [CHAT]
 chat_id = [YOUR TELEGRAM CHAT ID]
