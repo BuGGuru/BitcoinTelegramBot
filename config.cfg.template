@@ -6,3 +6,7 @@ interval_check = False
 
 [CHAT]
 chat_id = [YOUR TELEGRAM CHAT ID]
+
+[BITMEX]
+bitmex_api_key = [YOUR API KEY]
+bitmex_secret = [YOUR API SECRET]

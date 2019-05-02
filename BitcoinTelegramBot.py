@@ -4,6 +4,7 @@
 from time import sleep
 import configparser
 import requests
+import bitmex
 
 #############
 ## Configs ##
@@ -13,7 +14,7 @@ import requests
 config = configparser.RawConfigParser()
 config.read("./config.cfg")
 
-## Set configs
+## Get configs
 bot_token = config.get("BOT", "token")
 chat_id = config.get("CHAT", "chat_id")
 history_length = int(config.get("BOT", "history_length"))
@@ -43,6 +44,15 @@ history = []
 offset = "-0"
 ask_price_steps = False
 
+######################
+## Bitmex variables ##
+######################
+
+bitmex_key = config.get("BITMEX", "bitmex_api_key")
+bitmex_secret = config.get("BITMEX", "bitmex_secret")
+
+client = bitmex.bitmex(test=False, api_key=bitmex_key, api_secret=bitmex_secret)
+
 ####################
 ## Price methods  ##
 ####################
@@ -71,6 +81,19 @@ def get_messages(offset):
 ## Send message to a chat
 def send_message(chat, message):
     requests.get("https://api.telegram.org/bot" + str(bot_token) + "/sendMessage?chat_id=" + str(chat) + "&text=" + str(message))
+
+####################
+## Bitmex methods ##
+####################
+
+## Get open position
+def get_bitmex_position():
+    result = client.Position.Position_get().result()
+    result_json = result[0][0]
+    unrealisedPnl = result_json["unrealisedPnl"] / 100000000
+    currentQty = result_json["currentQty"]
+    openPosition = "Your Position of " + str(currentQty) + " has an PNL of " + str(unrealisedPnl)
+    return openPosition
 
 ##################
 ## Pre-warm Bot ##
@@ -150,6 +173,10 @@ while True:
                 send_message(chat_id, message)
                 price_level = new_usd_level
                 announced_price = new_usd
+                ## Announce open position
+                message = get_bitmex_position()
+                print(message)
+                send_message(chat_id, message)
 
             ## Check if price is stable
             elif (sum(history)/len(history)) == new_usd_level:
@@ -166,6 +193,10 @@ while True:
                 send_message(chat_id, message)
                 price_level = new_usd_level
                 announced_price = new_usd
+                ## Announce open position
+                message = get_bitmex_position()
+                print(message)
+                send_message(chat_id, message)
 
     ##################
     ## Make history ##
@@ -183,6 +214,10 @@ while True:
         message = "Interval check - the price is " + str(new_usd) + " USD"
         print(message)
         if interval_check:
+            send_message(chat_id, message)
+            ## Announce open position
+            message = get_bitmex_position()
+            print(message)
             send_message(chat_id, message)
         interval_count = 0
     interval_count = interval_count + 1
@@ -219,6 +254,10 @@ while True:
                     splitted = bot_messages_text_single.split(' ')
                     if splitted[0] == "/show_settings":
                         message = "Price steps are " + str(divider) + " and the price is stable after " + str(history_length) + " minutes"
+                        print(message)
+                        send_message(chat_id, message)
+                    if splitted[0] == "/show_position":
+                        message = get_bitmex_position()
                         print(message)
                         send_message(chat_id, message)
                     if splitted[0] == "/set_price_steps":
