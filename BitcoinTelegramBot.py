@@ -5,6 +5,10 @@ from time import sleep
 import configparser
 import requests
 import bitmex
+import urllib3
+
+## Disable warnings
+urllib3.disable_warnings()
 
 #############
 ## Configs ##
