@@ -162,7 +162,7 @@ while True:
     ## Do nothing if no new price level
     if price_level != new_usd_level:
         ## Price has to move more then half the divider
-        if (new_usd < (announced_price-(divider/2))) or (new_usd > (announced_price+(divider/2))):
+        if (new_usd < (announced_price-(divider/4))) or (new_usd > (announced_price+(divider/4))):
             ## Check if new price level is in history
             if not new_usd_level in history:
                 ## Check if price is higher or lower
@@ -232,7 +232,7 @@ while True:
 
     ## Let the bot monitor for at least 60 Sec.
     mon_loop = 0
-    while mon_loop < 6:
+    while mon_loop < 12:
         ## Get updates from bot
         bot_messages_json = get_messages(offset)
 
@@ -303,7 +303,7 @@ while True:
 
         ## Loop things
         mon_loop = mon_loop + 1
-        sleep(10)
+        sleep(5)
         #####################
         ## End of mon loop ##
         #####################
