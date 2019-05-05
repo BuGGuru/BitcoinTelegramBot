@@ -317,11 +317,15 @@ while True:
                             ## Deactivate Bitmex if it is enabled
                             if bitmex_active:
                                 bitmex_active = False
+                                config.set("BITMEX", "bitmex_active", "False")
+                                write_config = True
                                 message = "Bitmex disabled"
                                 messages.append(message)
                             ## Enable Bitmex if it is disabled
                             else:
                                 bitmex_active = True
+                                config.set("BITMEX", "bitmex_active", "True")
+                                write_config = True
                                 bitmex_client = bitmex.bitmex(test=False, api_key=bitmex_key, api_secret=bitmex_secret)
                                 message = "Bitmex enabled"
                                 messages.append(message)
