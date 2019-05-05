@@ -55,10 +55,18 @@ bot_restarted = True
 ## Bitmex variables ##
 ######################
 
+bitmex_active = config.get("BITMEX", "bitmex_active")
 bitmex_key = config.get("BITMEX", "bitmex_api_key")
 bitmex_secret = config.get("BITMEX", "bitmex_secret")
 
-client = bitmex.bitmex(test=False, api_key=bitmex_key, api_secret=bitmex_secret)
+if bitmex_active == "True":
+    ## Convert string to bool for bitmex_active
+    bitmex_active = True
+    ## Initiate Bitmex api
+    bitmex_client = bitmex.bitmex(test=False, api_key=bitmex_key, api_secret=bitmex_secret)
+else:
+    ## Convert string to bool for bitmex_active
+    bitmex_active = False
 
 ####################
 ## Price methods  ##
@@ -95,7 +103,7 @@ def send_message(chat, message):
 
 ## Get open position
 def get_bitmex_position():
-    result = client.Position.Position_get().result()
+    result = bitmex_client.Position.Position_get().result()
     result_json = result[0][0]
     unrealisedPnl = result_json["unrealisedPnl"] / 100000000
     currentQty = result_json["currentQty"]
@@ -177,10 +185,12 @@ while True:
                 messages.append(message)
                 price_level = new_usd_level
                 announced_price = new_usd
-                ## Announce open position
-                message = get_bitmex_position()
-                print(message)
-                messages.append(message)
+
+                ## Announce open position if Bitmex is active
+                if bitmex_active:
+                    message = get_bitmex_position()
+                    print(message)
+                    messages.append(message)
 
             ## Check if price is stable
             elif (sum(history)/len(history)) == new_usd_level:
@@ -197,10 +207,12 @@ while True:
                 messages.append(message)
                 price_level = new_usd_level
                 announced_price = new_usd
-                ## Announce open position
-                message = get_bitmex_position()
-                print(message)
-                messages.append(message)
+
+                ## Announce open position if Bitmex is active
+                if bitmex_active:
+                    message = get_bitmex_position()
+                    print(message)
+                    messages.append(message)
 
     ##################
     ## Make history ##
@@ -219,10 +231,11 @@ while True:
         print(message)
         if interval_check:
             messages.append(message)
-            ## Announce open position
-            message = get_bitmex_position()
-            print(message)
-            messages.append(message)
+            ## Announce open position if Bitmex is active
+            if bitmex_active:
+                message = get_bitmex_position()
+                print(message)
+                messages.append(message)
         interval_count = 0
     interval_count = interval_count + 1
 
@@ -265,6 +278,7 @@ while True:
                             print(message)
                             messages.append(message)
                         if splitted[0] == "/show_position":
+                            bitmex_client = bitmex.bitmex(test=False, api_key=bitmex_key, api_secret=bitmex_secret)
                             message = get_bitmex_position()
                             print(message)
                             messages.append(message)
@@ -297,6 +311,20 @@ while True:
                                 message = "Tell me your desired price steps in USD as integer"
                                 messages.append(message)
                                 print(message)
+
+                        ## Listen for Bitmex toggle command
+                        if splitted[0] == "/toggle_bitmex":
+                            ## Deactivate Bitmex if it is enabled
+                            if bitmex_active:
+                                bitmex_active = False
+                                message = "Bitmex disabled"
+                                messages.append(message)
+                            ## Enable Bitmex if it is disabled
+                            else:
+                                bitmex_active = True
+                                bitmex_client = bitmex.bitmex(test=False, api_key=bitmex_key, api_secret=bitmex_secret)
+                                message = "Bitmex enabled"
+                                messages.append(message)
                     except KeyError:
                         print("Maybe edited message received")
 
