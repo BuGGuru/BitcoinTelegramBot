@@ -48,6 +48,8 @@ history = []
 offset = "-0"
 ask_price_steps = False
 messages = []
+write_config = False
+bot_restarted = True
 
 ######################
 ## Bitmex variables ##
@@ -109,10 +111,7 @@ price_level = int(get_latest_bitcoin_price("usd")/divider)
 while len(history) < history_length:
     history.append(price_level)
 
-## discard old messages
-discard_messages = get_messages(offset)
-
-## send out restart message
+## Send out restart message
 message = "The Bot restarted"
 print(message)
 send_message(chat_id, message)
@@ -246,61 +245,68 @@ while True:
         ## Check messages if exists
         if message_amount != 0:
 
-            ## Go through all new messages
-            message_counter = 0
-            for i in bot_messages_json["result"]:
-                ## Catch key error due to other updates than message
-                try:
-                    bot_messages_text_single = str(bot_messages_json["result"][message_counter]["message"]["text"])
-                    message_counter = message_counter + 1
-                    print("New Message: " + bot_messages_text_single)
+            ## Suppress old actions if bot restarted
+            if bot_restarted:
+                bot_restarted = False
+            else:
+                ## Go through all new messages
+                message_counter = 0
+                for i in bot_messages_json["result"]:
+                    ## Catch key error due to other updates than message
+                    try:
+                        bot_messages_text_single = str(bot_messages_json["result"][message_counter]["message"]["text"])
+                        message_counter = message_counter + 1
+                        print("New Message: " + bot_messages_text_single)
 
-                    ## Check for commands
-                    splitted = bot_messages_text_single.split(' ')
-                    if splitted[0] == "/show_settings":
-                        message = "Price steps are " + str(divider) + " and the price is stable after " + str(history_length) + " minutes"
-                        print(message)
-                        messages.append(message)
-                    if splitted[0] == "/show_position":
-                        message = get_bitmex_position()
-                        print(message)
-                        messages.append(message)
-                    if splitted[0] == "/set_price_steps":
-                        if len(splitted) > 1:
+                        ## Check for commands
+                        splitted = bot_messages_text_single.split(' ')
+                        if splitted[0] == "/show_settings":
+                            message = "Price steps are " + str(divider) + " and the price is stable after " + str(history_length) + " minutes"
+                            print(message)
+                            messages.append(message)
+                        if splitted[0] == "/show_position":
+                            message = get_bitmex_position()
+                            print(message)
+                            messages.append(message)
+                        if splitted[0] == "/set_price_steps":
+                            if len(splitted) > 1:
+                                try:
+                                    divider = int(splitted[1])
+                                    config.set('BOT', 'divider', divider)
+                                    write_config = True
+                                    message = "Set the price stepping to " + str(splitted[1])
+                                    print(message)
+                                    messages.append(message)
+                                    mon_loop = 50
+                                except ValueError:
+                                    ask_price_steps = True
+                            else:
+                                ask_price_steps = True
+                        if ask_price_steps:
                             try:
-                                divider = int(splitted[1])
+                                divider = int(splitted[0])
                                 config.set('BOT', 'divider', divider)
-                                message = "Set the price stepping to " + str(splitted[1])
+                                write_config = True
+                                message = "Set the price stepping to " + str(splitted[0])
                                 print(message)
                                 messages.append(message)
                                 mon_loop = 50
+                                ask_price_steps = False
                             except ValueError:
                                 ask_price_steps = True
-                        else:
-                            ask_price_steps = True
-                    if ask_price_steps:
-                        try:
-                            divider = int(splitted[0])
-                            config.set('BOT', 'divider', divider)
-                            message = "Set the price stepping to " + str(splitted[0])
-                            print(message)
-                            messages.append(message)
-                            mon_loop = 50
-                            ask_price_steps = False
-                        except ValueError:
-                            ask_price_steps = True
-                            message = "Tell me your desired price steps in USD as integer"
-                            messages.append(message)
-                            print(message)
-                except KeyError:
-                    print("Maybe edited message received")
+                                message = "Tell me your desired price steps in USD as integer"
+                                messages.append(message)
+                                print(message)
+                    except KeyError:
+                        print("Maybe edited message received")
 
             ## Set new offset to acknowledge messages
             offset = str(bot_messages_json["result"][message_amount - 1]["update_id"] + 1)
 
-        ## Write new configs to file
-        with open('config.cfg', 'w') as configfile:
-            config.write(configfile)
+        ## Write config to file if necessary
+        if write_config:
+            with open('config.cfg', 'w') as configfile:
+                config.write(configfile)
 
         ## Send collected messages
         if messages:
