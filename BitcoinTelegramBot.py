@@ -58,6 +58,7 @@ bot_restarted = True
 bitmex_active = config.get("BITMEX", "bitmex_active")
 bitmex_key = config.get("BITMEX", "bitmex_api_key")
 bitmex_secret = config.get("BITMEX", "bitmex_secret")
+bitmex_position_amount = 0
 
 if bitmex_active == "True":
     ## Convert string to bool for bitmex_active
@@ -102,13 +103,21 @@ def send_message(chat, message):
 ####################
 
 ## Get open position
-def get_bitmex_position():
+def get_bitmex_position(askedValue):
     result = bitmex_client.Position.Position_get().result()
-    result_json = result[0][0]
-    unrealisedPnl = result_json["unrealisedPnl"] / 100000000
-    currentQty = result_json["currentQty"]
-    openPosition = "Your Position of " + str(currentQty) + " has an PNL of " + str(unrealisedPnl)
-    return openPosition
+    try:
+        result_json = result[0][0]
+        unrealisedPnl = result_json["unrealisedPnl"] / 100000000
+        currentQty = result_json["currentQty"]
+        openPosition = "Your Position of " + str(currentQty) + " has an PNL of " + str(unrealisedPnl)
+        if askedValue == "openPosition":
+            return openPosition
+        if askedValue == "currentQty":
+            return currentQty
+        if askedValue == "unrealisedPnl":
+            return unrealisedPnl
+    except IndexError:
+        return "No open position!"
 
 ##################
 ## Pre-warm Bot ##
@@ -188,7 +197,7 @@ while True:
 
                 ## Announce open position if Bitmex is active
                 if bitmex_active:
-                    message = get_bitmex_position()
+                    message = get_bitmex_position("openPosition")
                     print(message)
                     messages.append(message)
 
@@ -210,7 +219,7 @@ while True:
 
                 ## Announce open position if Bitmex is active
                 if bitmex_active:
-                    message = get_bitmex_position()
+                    message = get_bitmex_position("openPosition")
                     print(message)
                     messages.append(message)
 
@@ -233,11 +242,44 @@ while True:
             messages.append(message)
             ## Announce open position if Bitmex is active
             if bitmex_active:
-                message = get_bitmex_position()
+                message = get_bitmex_position("openPosition")
                 print(message)
                 messages.append(message)
         interval_count = 0
     interval_count = interval_count + 1
+
+    #############################
+    ## Bitmex position tracker ##
+    #############################
+
+    if bitmex_active:
+        ## Get position size
+        bitmex_position_amount_new = get_bitmex_position("currentQty")
+        ## Calculate the difference
+        bitmex_position_amount_change = abs(bitmex_position_amount_new - bitmex_position_amount)
+        ## Announce if position was reduced
+        if bitmex_position_amount_new < bitmex_position_amount:
+            message = "Reduced Bitmex position by " + str(bitmex_position_amount_change)
+            print(message)
+            messages.append(message)
+            ## Announce new position and PNL
+            message = get_bitmex_position("openPosition")
+            print(message)
+            messages.append(message)
+        ## Announce if position was reduced
+        elif bitmex_position_amount_new > bitmex_position_amount:
+            message = "Reduced Bitmex position by " + str(bitmex_position_amount_change)
+            print(message)
+            messages.append(message)
+            ## Announce new position and PNL
+            message = get_bitmex_position("openPosition")
+            print(message)
+            messages.append(message)
+        ## Set new Bitmex position amount
+        bitmex_position_amount = bitmex_position_amount_new
+        ## Suppress message if the bot restarted
+        if bot_restarted:
+            messages = []
 
     #####################
     ## Chat monitoring ##
@@ -279,7 +321,7 @@ while True:
                             messages.append(message)
                         if splitted[0] == "/show_position":
                             bitmex_client = bitmex.bitmex(test=False, api_key=bitmex_key, api_secret=bitmex_secret)
-                            message = get_bitmex_position()
+                            message = get_bitmex_position("openPosition")
                             print(message)
                             messages.append(message)
                         if splitted[0] == "/set_price_steps":
@@ -351,6 +393,7 @@ while True:
 
         ## Loop things
         mon_loop = mon_loop + 1
+        bot_restarted = False
         sleep(5)
 
         #####################
