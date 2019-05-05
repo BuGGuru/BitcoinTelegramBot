@@ -47,6 +47,7 @@ history = []
 
 offset = "-0"
 ask_price_steps = False
+messages = []
 
 ######################
 ## Bitmex variables ##
@@ -174,13 +175,13 @@ while True:
                 ## Announce since price not in history
                 message = priceIs + " price level: " + str(new_usd_level * divider) + " - " + str(new_usd_level * divider + divider)
                 print(message)
-                send_message(chat_id, message)
+                messages.append(message)
                 price_level = new_usd_level
                 announced_price = new_usd
                 ## Announce open position
                 message = get_bitmex_position()
                 print(message)
-                send_message(chat_id, message)
+                messages.append(message)
 
             ## Check if price is stable
             elif (sum(history)/len(history)) == new_usd_level:
@@ -194,13 +195,13 @@ while True:
                 ## Announce since price is stable
                 message = priceIs + " price level: " + str(new_usd_level * divider) + " - " + str(new_usd_level * divider + divider)
                 print(message)
-                send_message(chat_id, message)
+                messages.append(message)
                 price_level = new_usd_level
                 announced_price = new_usd
                 ## Announce open position
                 message = get_bitmex_position()
                 print(message)
-                send_message(chat_id, message)
+                messages.append(message)
 
     ##################
     ## Make history ##
@@ -218,11 +219,11 @@ while True:
         message = "Interval check - the price is " + str(new_usd) + " USD"
         print(message)
         if interval_check:
-            send_message(chat_id, message)
+            messages.append(message)
             ## Announce open position
             message = get_bitmex_position()
             print(message)
-            send_message(chat_id, message)
+            messages.append(message)
         interval_count = 0
     interval_count = interval_count + 1
 
@@ -259,11 +260,11 @@ while True:
                     if splitted[0] == "/show_settings":
                         message = "Price steps are " + str(divider) + " and the price is stable after " + str(history_length) + " minutes"
                         print(message)
-                        send_message(chat_id, message)
+                        messages.append(message)
                     if splitted[0] == "/show_position":
                         message = get_bitmex_position()
                         print(message)
-                        send_message(chat_id, message)
+                        messages.append(message)
                     if splitted[0] == "/set_price_steps":
                         if len(splitted) > 1:
                             try:
@@ -271,7 +272,7 @@ while True:
                                 config.set('BOT', 'divider', divider)
                                 message = "Set the price stepping to " + str(splitted[1])
                                 print(message)
-                                send_message(chat_id, message)
+                                messages.append(message)
                                 mon_loop = 50
                             except ValueError:
                                 ask_price_steps = True
@@ -283,13 +284,13 @@ while True:
                             config.set('BOT', 'divider', divider)
                             message = "Set the price stepping to " + str(splitted[0])
                             print(message)
-                            send_message(chat_id, message)
+                            messages.append(message)
                             mon_loop = 50
                             ask_price_steps = False
                         except ValueError:
                             ask_price_steps = True
                             message = "Tell me your desired price steps in USD as integer"
-                            send_message(chat_id, message)
+                            messages.append(message)
                             print(message)
                 except KeyError:
                     print("Maybe edited message received")
@@ -301,12 +302,23 @@ while True:
         with open('config.cfg', 'w') as configfile:
             config.write(configfile)
 
+        ## Send collected messages
+        if messages:
+            print("Sending messages to the chat")
+            all_messages = ""
+            for x in messages:
+                all_messages = all_messages + "\n" + x
+            send_message(chat_id, all_messages)
+            messages = []
+
         ## Loop things
         mon_loop = mon_loop + 1
         sleep(5)
+
         #####################
         ## End of mon loop ##
         #####################
+
     ######################
     ## End of main loop ##
     ######################
