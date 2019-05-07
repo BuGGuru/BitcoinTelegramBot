@@ -10,70 +10,11 @@ import urllib3
 ## Disable warnings
 urllib3.disable_warnings()
 
-#############
-## Configs ##
-#############
-
-## Import the configs from file
-config = configparser.RawConfigParser()
-config.read("./config.cfg")
-
-## Get configs
-bot_token = config.get("BOT", "token")
-chat_id = config.get("CHAT", "chat_id")
-history_length = int(config.get("BOT", "history_length"))
-divider = int(config.get("BOT", "divider"))
-interval_check = config.get("BOT", "interval_check")
-
-## Convert String to bool for interval check
-if interval_check == "True":
-    interval_check = True
-else:
-    interval_check = False
-
-#####################
-## Price variables ##
-#####################
-
-previous_eur = 0
-previous_usd = 0
-interval_count = 0
-announced_price = 0
-history = []
-
-###################
-## Bot variables ##
-###################
-
-offset = "-0"
-ask_price_steps = False
-messages = []
-write_config = False
-bot_restarted = True
-
-######################
-## Bitmex variables ##
-######################
-
-bitmex_active = config.get("BITMEX", "bitmex_active")
-bitmex_key = config.get("BITMEX", "bitmex_api_key")
-bitmex_secret = config.get("BITMEX", "bitmex_secret")
-bitmex_position_amount = 0
-
-if bitmex_active == "True":
-    ## Convert string to bool for bitmex_active
-    bitmex_active = True
-    ## Initiate Bitmex api
-    bitmex_client = bitmex.bitmex(test=False, api_key=bitmex_key, api_secret=bitmex_secret)
-else:
-    ## Convert string to bool for bitmex_active
-    bitmex_active = False
-
 ####################
 ## Price methods  ##
 ####################
 
-## Get the prices from the api
+## Get the prices from an api
 def get_latest_bitcoin_price(currency):
     if currency == "usd":
         response = requests.get("https://api.coindesk.com/v1/bpi/currentprice/USD.json", verify=False)
@@ -109,8 +50,8 @@ def get_bitmex_position(askedValue):
         result_json = result[0][0]
         unrealisedPnl = result_json["unrealisedPnl"] / 100000000
         currentQty = result_json["currentQty"]
-        openPosition = "Your Position of " + str(currentQty) + " has an PNL of " + str(unrealisedPnl)
         if askedValue == "openPosition":
+            openPosition = "Your Position of " + str(currentQty) + " has a PNL of " + str(unrealisedPnl)
             return openPosition
         if askedValue == "currentQty":
             return currentQty
@@ -118,6 +59,56 @@ def get_bitmex_position(askedValue):
             return unrealisedPnl
     except IndexError:
         return "No open position!"
+
+#############
+## Configs ##
+#############
+
+## Import the configs from file
+config = configparser.RawConfigParser()
+config.read("./config.cfg")
+
+## Get configs
+bot_token = config.get("BOT", "token")
+chat_id = config.get("CHAT", "chat_id")
+history_length = int(config.get("BOT", "history_length"))
+divider = int(config.get("BOT", "divider"))
+interval_check = config.getboolean("BOT", "interval_check")
+
+#####################
+## Price variables ##
+#####################
+
+previous_eur = 0
+previous_price = 0
+interval_count = 0
+announced_price = 0
+history = []
+
+###################
+## Bot variables ##
+###################
+
+offset = "-0"
+ask_price_steps = False
+messages = []
+write_config = False
+bot_restarted = True
+
+######################
+## Bitmex variables ##
+######################
+
+## Import configs from file
+bitmex_active = config.getboolean("BITMEX", "bitmex_active")
+bitmex_key = config.get("BITMEX", "bitmex_api_key")
+bitmex_secret = config.get("BITMEX", "bitmex_secret")
+
+## Initiate Bitmex api
+bitmex_client = bitmex.bitmex(test=False, api_key=bitmex_key, api_secret=bitmex_secret)
+
+## Look if the user has an open position
+bitmex_position_amount = get_bitmex_position("currentQty")
 
 ##################
 ## Pre-warm Bot ##
@@ -129,71 +120,53 @@ while len(history) < history_length:
     history.append(price_level)
 
 ## Send out restart message
-message = "The Bot restarted"
-print(message)
-send_message(chat_id, message)
+if bot_restarted:
+    message = "The Bot restarted"
+    print(message)
+    send_message(chat_id, message)
 
 ###############
 ## Main loop ##
 ###############
 
 while True:
-    new_eur = get_latest_bitcoin_price("eur")
-    new_usd = get_latest_bitcoin_price("usd")
-    new_usd_level = int(new_usd / divider)
-    new_eur_level = int(new_eur / divider)
+    ## Get new price from api
+    new_price = get_latest_bitcoin_price("usd")
+    new_price_level = int(new_price / divider)
 
-    #############
-    #### EUR ####
-    #############
-
-    if new_eur < previous_eur:
-        change_eur = new_eur - previous_eur
-        previous_eur = new_eur
-        print("Price change: New price is", get_latest_bitcoin_price("eur"), "EUR and changed", change_eur, "EUR", "-- DOWN")
-    elif new_eur > previous_eur:
-        change_eur = new_eur - previous_eur
-        previous_eur = new_eur
-        print("Price change: New price is", get_latest_bitcoin_price("eur"), "EUR and changed", change_eur, "EUR", "-- UP")
+    ## Print price changes to console
+    if new_price < previous_price:
+        price_change_amount = new_price - previous_price
+        previous_price = new_price
+        print("Price change: New price is", get_latest_bitcoin_price("usd"), "USD and changed", price_change_amount, "USD", "-- DOWN")
+    elif new_price > previous_price:
+        price_change_amount = new_price - previous_price
+        previous_price = new_price
+        print("Price change: New price is", get_latest_bitcoin_price("usd"), "USD and changed", price_change_amount, "USD", "-- UP")
     else:
-        change_eur = 0
-
-    #############
-    #### USD ####
-    #############
-
-    if new_usd < previous_usd:
-        change_usd = new_usd - previous_usd
-        previous_usd = new_usd
-        print("Price change: New price is", get_latest_bitcoin_price("usd"), "USD and changed", change_usd, "USD", "-- DOWN")
-    elif new_usd > previous_usd:
-        change_usd = new_usd - previous_usd
-        previous_usd = new_usd
-        print("Price change: New price is", get_latest_bitcoin_price("usd"), "USD and changed", change_usd, "USD", "-- UP")
-    else:
-        change_usd = 0
+        price_change_amount = 0
 
     #############
     #### BOT ####
     #############
     ## Do nothing if no new price level
-    if price_level != new_usd_level:
-        ## Price has to move more then half the divider
-        if (new_usd < (announced_price-(divider/4))) or (new_usd > (announced_price+(divider/4))):
-            ## Check if new price level is in history
-            if not new_usd_level in history:
+    if price_level != new_price_level:
+        ## Price has to move more then 25% of the divider to avoid spam
+        if (new_price < (announced_price - (divider / 4))) or (new_price > (announced_price + (divider / 4))):
+            ## Check if new price level is not in history
+            if new_price_level not in history:
                 ## Check if price is higher or lower
-                if announced_price > new_usd:
+                if announced_price > new_price:
                     priceIs = "Lower"
                 else:
                     priceIs = "Higher"
 
                 ## Announce since price not in history
-                message = priceIs + " price level: " + str(new_usd_level * divider) + " - " + str(new_usd_level * divider + divider)
+                message = priceIs + " price level: " + str(new_price_level * divider) + " - " + str(new_price_level * divider + divider)
                 print(message)
                 messages.append(message)
-                price_level = new_usd_level
-                announced_price = new_usd
+                price_level = new_price_level
+                announced_price = new_price
 
                 ## Announce open position if Bitmex is active
                 if bitmex_active:
@@ -202,20 +175,20 @@ while True:
                     messages.append(message)
 
             ## Check if price is stable
-            elif (sum(history)/len(history)) == new_usd_level:
+            elif (sum(history)/len(history)) == new_price_level:
 
                 ## Check if price is higher or lower
-                if announced_price > new_usd:
+                if announced_price > new_price:
                     priceIs = "Lower"
                 else:
                     priceIs = "Higher"
 
                 ## Announce since price is stable
-                message = priceIs + " price level: " + str(new_usd_level * divider) + " - " + str(new_usd_level * divider + divider)
+                message = priceIs + " price level: " + str(new_price_level * divider) + " - " + str(new_price_level * divider + divider)
                 print(message)
                 messages.append(message)
-                price_level = new_usd_level
-                announced_price = new_usd
+                price_level = new_price_level
+                announced_price = new_price
 
                 ## Announce open position if Bitmex is active
                 if bitmex_active:
@@ -227,7 +200,7 @@ while True:
     ## Make history ##
     ##################
 
-    history.append(new_usd_level)
+    history.append(new_price_level)
     del history[0]
     print("Price level history: " + str(history))
 
@@ -236,8 +209,9 @@ while True:
     #####################
 
     if interval_count == 60:
-        message = "Interval check - the price is " + str(new_usd) + " USD"
+        message = "Interval check - the price is " + str(new_price) + " USD"
         print(message)
+        # Announce interval check if active
         if interval_check:
             messages.append(message)
             ## Announce open position if Bitmex is active
@@ -314,19 +288,28 @@ while True:
                         print("New Message: " + bot_messages_text_single)
 
                         ## Check for commands
+                        ## Split message by " " - space - to be able to parse it easier
                         splitted = bot_messages_text_single.split(' ')
+
+                        ## Tells the user his settings
                         if splitted[0] == "/show_settings":
+                            ## Tell the user how big the price brackets are and when the price is considered stable
                             message = "Price steps are " + str(divider) + " and the price is stable after " + str(history_length) + " minutes"
                             print(message)
                             messages.append(message)
+
+                        ## Tell the user his open bitmex position
                         if splitted[0] == "/show_position":
                             bitmex_client = bitmex.bitmex(test=False, api_key=bitmex_key, api_secret=bitmex_secret)
                             message = get_bitmex_position("openPosition")
                             print(message)
                             messages.append(message)
+
+                        ## The user wants to change the price steps
                         if splitted[0] == "/set_price_steps":
                             if len(splitted) > 1:
                                 try:
+                                    ## Look for a valid value for the new price steps
                                     divider = int(splitted[1])
                                     config.set('BOT', 'divider', divider)
                                     write_config = True
@@ -335,11 +318,15 @@ while True:
                                     messages.append(message)
                                     mon_loop = 50
                                 except ValueError:
+                                    ## The user did not give a valid value for the price steps so ask him
                                     ask_price_steps = True
                             else:
+                                ## The user did not give a valid value for the price steps so ask him
                                 ask_price_steps = True
+                        ## If the user got asked for his desired price steps, look for the answer
                         if ask_price_steps:
                             try:
+                                ## Look for a valid value for the new price steps
                                 divider = int(splitted[0])
                                 config.set('BOT', 'divider', divider)
                                 write_config = True
@@ -348,6 +335,7 @@ while True:
                                 messages.append(message)
                                 mon_loop = 50
                                 ask_price_steps = False
+                            ## The user did not give a valid value for the price steps so ask him
                             except ValueError:
                                 ask_price_steps = True
                                 message = "Tell me your desired price steps in USD as integer"
@@ -374,7 +362,7 @@ while True:
                     except KeyError:
                         print("Another type of message received")
 
-            ## Set new offset to acknowledge messages
+            ## Set new offset to acknowledge messages on the telegram api
             offset = str(bot_messages_json["result"][message_amount - 1]["update_id"] + 1)
 
         ## Write config to file if necessary
