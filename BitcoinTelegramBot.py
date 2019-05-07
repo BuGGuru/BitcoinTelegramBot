@@ -169,7 +169,7 @@ while True:
     elif new_usd > previous_usd:
         change_usd = new_usd - previous_usd
         previous_usd = new_usd
-        print("Price change: New price is", get_latest_bitcoin_price("usd"), "USD and changed", change_usd, "USD", "-- UP" )
+        print("Price change: New price is", get_latest_bitcoin_price("usd"), "USD and changed", change_usd, "USD", "-- UP")
     else:
         change_usd = 0
 
@@ -266,9 +266,9 @@ while True:
             message = get_bitmex_position("openPosition")
             print(message)
             messages.append(message)
-        ## Announce if position was reduced
+        ## Announce if position was increased
         elif bitmex_position_amount_new > bitmex_position_amount:
-            message = "Reduced Bitmex position by " + str(bitmex_position_amount_change)
+            message = "Increased Bitmex position by " + str(bitmex_position_amount_change)
             print(message)
             messages.append(message)
             ## Announce new position and PNL
@@ -330,7 +330,7 @@ while True:
                                     divider = int(splitted[1])
                                     config.set('BOT', 'divider', divider)
                                     write_config = True
-                                    message = "Set the price stepping to " + str(splitted[1])
+                                    message = "The price stepping is set to " + str(splitted[1])
                                     print(message)
                                     messages.append(message)
                                     mon_loop = 50
@@ -343,7 +343,7 @@ while True:
                                 divider = int(splitted[0])
                                 config.set('BOT', 'divider', divider)
                                 write_config = True
-                                message = "Set the price stepping to " + str(splitted[0])
+                                message = "The price stepping is set to " + str(splitted[0])
                                 print(message)
                                 messages.append(message)
                                 mon_loop = 50
@@ -372,7 +372,7 @@ while True:
                                 message = "Bitmex enabled"
                                 messages.append(message)
                     except KeyError:
-                        print("Maybe edited message received")
+                        print("Another type of message received")
 
             ## Set new offset to acknowledge messages
             offset = str(bot_messages_json["result"][message_amount - 1]["update_id"] + 1)
