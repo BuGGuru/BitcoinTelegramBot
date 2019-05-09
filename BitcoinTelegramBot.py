@@ -458,6 +458,10 @@ while True:
                         ## Update the message counter
                         message_counter = message_counter + 1
 
+                        ##############
+                        ## Commands ##
+                        ##############
+
                         ## Check for commands
                         ## Split message by " " to be able to parse it easier
                         splitted = bot_messages_text_single.split(' ')
@@ -639,6 +643,16 @@ while True:
                                 message = "Tell me your Bitmex API secret. Be sure you created a read-only API key on Bitmex."
                                 messages.append(message)
                                 print(message)
+
+                        ## Tell the user the real price
+                        if splitted[0] == "/show_real_price":
+                            message = "The BTC price is: " + str(new_price) + " USD"
+                            print(message)
+                            messages.append(message)
+
+                        #####################
+                        ## End of commands ##
+                        #####################
 
                         ## Write config to file if necessary
                         if write_config:
