@@ -447,6 +447,7 @@ while True:
                         ## Get settings into readable variables
                         divider = userlist[find_user_index][3]
                         history_length = userlist[find_user_index][2]
+                        interval_check = userlist[find_user_index][4]
                         bitmex_key = userlist[find_user_index][6]
                         bitmex_secret = userlist[find_user_index][7]
                         bitmex_active = userlist[find_user_index][5]
@@ -467,8 +468,8 @@ while True:
 
                         ## Tell the user his settings
                         if splitted[0] == "/show_settings":
-                            ## Tell the user how big the price brackets are and when the price is considered stable
-                            message = "Price steps are " + str(divider) + " and the price is stable after " + str(history_length) + " minutes"
+                            ## Tell the user how big the price brackets and if the interval check is enabled
+                            message = "Price steps: " + str(divider) + " | Interval check: " + str(interval_check)
                             print(message)
                             messages.append(message)
 
