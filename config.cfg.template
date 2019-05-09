@@ -1,13 +1,48 @@
-[BOT]
-bot_token = [YOUR TELEGRAM BOT TOKEN]
+[General]
+bot_token = [YOUR TELEGRAM BOT TOKEN] #String
+userlist = [LIST OF CHAT IDS] #Strings seperated by ,
+
+[CHAT-ID USER1]
+history_length = [MINUTES UNTIL PRICE IS STABLE] # Integer
+divider = [PRICE STEPS] # Integer
+interval_check = False # True or False
+announced_price = 0
+bitmex_active = True # True or False
+bitmex_api_key = [BITMEX API KEY] # String
+bitmex_secret = [BITMEX SECRET] # String
+
+[CHAT-ID USER2]
+history_length = [MINUTES UNTIL PRICE IS STABLE] # Integer
+divider = [PRICE STEPS] # Integer
+interval_check = False # True or False
+announced_price = 0
+bitmex_active = True # True or False
+bitmex_api_key = [BITMEX API KEY] # String
+bitmex_secret = [BITMEX SECRET] # String
+
+
+#############
+## EXAMPLE  ##
+#############
+
+[General]
+bot_token = 99999999:xxxxxxxxxx
+userlist = 123456789,987654321
+
+[123456789]
 history_length = 15
-divider = 100
+divider = 50
 interval_check = False
+announced_price = 0
+bitmex_active = True
+bitmex_api_key = xxxxxxxxxxxxxx
+bitmex_secret = xxxxxxxxxxxxxxxxxxxxxxxxx
 
-[CHAT]
-chat_id = [YOUR TELEGRAM CHAT ID]
-
-[BITMEX]
-bitmex_active = False
-bitmex_api_key = [YOUR API KEY]
-bitmex_secret = [YOUR API SECRET]
+[987654321]
+history_length = 30
+divider = 100
+interval_check = TRUE
+announced_price = 0
+bitmex_active = FALSE
+bitmex_api_key =
+bitmex_secret =
