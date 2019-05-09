@@ -155,10 +155,9 @@ for user in userlist:
 if bot_restarted and not devmode:
     message = "The Bot restarted"
     print(message)
-    ## Send message to all user
-    for user in userlist:
-        print(user[1])
-        send_message(user[1], message)
+    ## Send message to the admin user (first user)
+    print("Reported to Admin: " + str(userlist[0][1]))
+    send_message(userlist[0][1], message)
 
 ###############
 ## Main loop ##
