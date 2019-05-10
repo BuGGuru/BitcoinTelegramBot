@@ -44,6 +44,17 @@ def send_message(chat, message_func):
 ####################
 ## Bitmex methods ##
 ####################
+## Get user Bitmex client running
+def get_bitmex_client(testnet, key, secret):
+    # noinspection PyBroadException
+    try:
+        bitmex_client_func = bitmex.bitmex(test=testnet, api_key=key, api_secret=secret)
+        ## Use this to validate the bitmex client
+        get_bitmex_position(bitmex_client_func, "currentQty")
+        ## If we got a valid bitmex client
+        return bitmex_client_func
+    except:
+        return False
 
 ## Get open position
 def get_bitmex_position(bitmex_client_func, askedValue):
@@ -113,6 +124,7 @@ for user in userlist:
     bitmex_active = config.getboolean(user, "bitmex_active")
     bitmex_key = config.get(user, "bitmex_api_key")
     bitmex_secret = config.get(user, "bitmex_secret")
+    bitmex_testnet = config.getboolean(user, "bitmex_testnet")
     announced_price = int(config.get(user, "announced_price"))
     history = []
     ask_price_steps = False
@@ -121,9 +133,17 @@ for user in userlist:
     bitmex_client = False
     bitmex_position_amount = 0
     if bitmex_active:
-        bitmex_client = bitmex.bitmex(test=False, api_key=bitmex_key, api_secret=bitmex_secret)
-        bitmex_position_amount = get_bitmex_position(bitmex_client, "currentQty")
-    settings = [user_position, user_chat_id, history_length, divider, interval_check, bitmex_active, bitmex_key, bitmex_secret, history, announced_price, bitmex_client, bitmex_position_amount, ask_price_steps, ask_bitmex_key, ask_bitmex_secret]
+        ## Try to get a client
+        bitmex_client = get_bitmex_client(bitmex_testnet, bitmex_key, bitmex_secret)
+        ## Check if valid client received
+        if bitmex_client:
+            # noinspection PyTypeChecker
+            ## Got valid client - check position amount
+            bitmex_position_amount = get_bitmex_position(bitmex_client, "currentQty")
+        else:
+            ## Client is not valid - deactivate Bitmex
+            bitmex_active = False
+    settings = [user_position, user_chat_id, history_length, divider, interval_check, bitmex_active, bitmex_key, bitmex_secret, history, announced_price, bitmex_client, bitmex_position_amount, ask_price_steps, ask_bitmex_key, ask_bitmex_secret, bitmex_testnet]
     userlist[user_position] = settings
     user_position = user_position + 1
 
@@ -198,10 +218,12 @@ while True:
         announced_price = user[9]
 
         ## Check if the user has an open Bitmex position
-        bitmex_open_position = "None!"
         if bitmex_active:
+            ## Try to get Bitmex client
             if user[10]:
                 bitmex_open_position = get_bitmex_position(user[10], "openPosition")
+            else:
+                bitmex_active = False
 
         ## Get new price level for the user
         new_price_level = int(new_price / divider)
@@ -228,6 +250,7 @@ while True:
 
                     ## Announce open position if Bitmex is active
                     if bitmex_active:
+                        # noinspection PyUnboundLocalVariable
                         message = bitmex_open_position
                         print(message)
                         messages.append(message)
@@ -424,6 +447,7 @@ while True:
                             f.write("bitmex_active = False\n")
                             f.write("bitmex_api_key = \n")
                             f.write("bitmex_secret = \n")
+                            f.write("bitmex_testnet = False\n")
                             f.close()
 
                             ## Import the new config file
@@ -451,6 +475,7 @@ while True:
                         bitmex_key = userlist[find_user_index][6]
                         bitmex_secret = userlist[find_user_index][7]
                         bitmex_active = userlist[find_user_index][5]
+                        bitmex_testnet = userlist[find_user_index][15]
                         ask_price_steps = userlist[find_user_index][12]
                         ask_bitmex_key = userlist[find_user_index][13]
                         ask_bitmex_secret = userlist[find_user_index][14]
@@ -476,10 +501,16 @@ while True:
                         ## Tell the user his open bitmex position
                         if splitted[0] == "/show_position":
                             if bitmex_key and bitmex_secret:
-                                bitmex_client = bitmex.bitmex(test=False, api_key=bitmex_key, api_secret=bitmex_secret)
-                                message = get_bitmex_position(bitmex_client, "openPosition")
-                                print(message)
-                                messages.append(message)
+                                bitmex_client = get_bitmex_client(bitmex_testnet, bitmex_key, bitmex_secret)
+                                if bitmex_client:
+                                    # noinspection PyTypeChecker
+                                    message = get_bitmex_position(bitmex_client, "openPosition")
+                                    print(message)
+                                    messages.append(message)
+                                else:
+                                    message = "Something went wrong. Ask the Admin!"
+                                    print(message)
+                                    messages.append(message)
                             else:
                                 message = "You need to set your API Key and Secret:\n/set_bitmex_key\n/set_bitmex_secret"
                                 print(message)
@@ -542,13 +573,19 @@ while True:
                                     messages.append(message)
                                 ## Enable Bitmex if it is disabled
                                 else:
-                                    userlist[find_user_index][10] = bitmex.bitmex(test=False, api_key=bitmex_key, api_secret=bitmex_secret)
-                                    bitmex_active = True
-                                    userlist[find_user_index][5] = True
-                                    config.set(str(check_user), "bitmex_active", "True")
-                                    write_config = True
-                                    message = "Bitmex enabled"
-                                    messages.append(message)
+                                    bitmex_client = get_bitmex_client(bitmex_testnet, bitmex_key, bitmex_secret)
+                                    if bitmex_client:
+                                        userlist[find_user_index][10] = bitmex_client
+                                        bitmex_active = True
+                                        userlist[find_user_index][5] = True
+                                        config.set(str(check_user), "bitmex_active", "True")
+                                        write_config = True
+                                        message = "Bitmex enabled"
+                                        messages.append(message)
+                                    else:
+                                        message = "You might need to set your API key and Secret:\n/set_bitmex_key\n/set_bitmex_secret\nAfter that, try again!"
+                                        print(message)
+                                        messages.append(message)
                             else:
                                 message = "You need to set your API key and Secret:\n/set_bitmex_key\n/set_bitmex_secret"
                                 print(message)
@@ -649,6 +686,25 @@ while True:
                             message = "The BTC price is: " + str(new_price) + " USD"
                             print(message)
                             messages.append(message)
+
+                        ## Toggle Testnet
+                        if splitted[0] == "/toggle_testnet":
+                            if bitmex_testnet:
+                                bitmex_testnet = False
+                                userlist[find_user_index][15] = False
+                                config.set(str(check_user), 'bitmex_testnet', bitmex_testnet)
+                                write_config = True
+                                message = "Activated Mainnet  - make sure to set the right API Keys\nUse /toggle_bitmex afterwards!"
+                                print(message)
+                                messages.append(message)
+                            else:
+                                bitmex_testnet = True
+                                userlist[find_user_index][15] = True
+                                config.set(str(check_user), 'bitmex_testnet', bitmex_testnet)
+                                write_config = True
+                                message = "Activated Testnet - make sure to set the right API Keys\nUse /toggle_bitmex afterwards!"
+                                print(message)
+                                messages.append(message)
 
                         #####################
                         ## End of commands ##
