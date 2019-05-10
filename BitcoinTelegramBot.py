@@ -17,20 +17,32 @@ urllib3.disable_warnings()
 ####################
 
 ## Get the prices from an api
-def get_latest_bitcoin_price(currency):
-    try:
-        if currency == "usd":
-            response = requests.get("https://api.coindesk.com/v1/bpi/currentprice/USD.json", verify=False)
-            response_json = response.json()
-            return int(response_json["bpi"]["USD"]["rate_float"])
-        else:
-            response = requests.get("https://api.coindesk.com/v1/bpi/currentprice/EUR.json", verify=False)
-            response_json = response.json()
-            return int(response_json["bpi"]["EUR"]["rate_float"])
-    except:
-        print("Error: Coindesk API failed!")
-        return False
+def get_latest_bitcoin_price(currency, source):
 
+    ## Price source Coindesk
+    if source == "coindesk":
+        try:
+            if currency == "usd":
+                response = requests.get("https://api.coindesk.com/v1/bpi/currentprice/USD.json", verify=False)
+                response_json = response.json()
+                return int(response_json["bpi"]["USD"]["rate_float"])
+            else:
+                response = requests.get("https://api.coindesk.com/v1/bpi/currentprice/EUR.json", verify=False)
+                response_json = response.json()
+                return int(response_json["bpi"]["EUR"]["rate_float"])
+        except:
+            print("Error: Coindesk API failed!")
+            return False
+
+    ## Price source Bitmex
+    if source == "bitmex":
+        try:
+            response = requests.get("https://www.bitmex.com/api/v1/trade?symbol=XBT&count=1&reverse=true", verify=False)
+            response_json = response.json()
+            return int(response_json[0]["price"])
+        except:
+            print("Error: Bitmex price API failed!")
+            return False
 
 ##################
 ## Bot methods  ##
@@ -176,6 +188,8 @@ write_config = False
 bot_restarted = True
 previous_price = 0
 interval_count = 0
+price_source = "bitmex"
+log_pricemoves = False
 devmode = False
 
 ##################
@@ -208,21 +222,22 @@ while True:
 
     ## Get new price from api
     try:
-        new_price = get_latest_bitcoin_price("usd")
+        new_price = get_latest_bitcoin_price("usd", price_source)
     except:
         new_price = previous_price
 
     ## Print price changes to console
-    if new_price < previous_price:
-        price_change_amount = new_price - previous_price
-        previous_price = new_price
-        print("Price change: New price is", new_price, "USD and changed", price_change_amount, "USD", "-- DOWN")
-    elif new_price > previous_price:
-        price_change_amount = new_price - previous_price
-        previous_price = new_price
-        print("Price change: New price is", new_price, "USD and changed", price_change_amount, "USD", "-- UP")
-    else:
-        price_change_amount = 0
+    if log_pricemoves:
+        if new_price < previous_price:
+            price_change_amount = new_price - previous_price
+            previous_price = new_price
+            print("Price change: New price is", new_price, "USD and changed", price_change_amount, "USD", "-- DOWN")
+        elif new_price > previous_price:
+            price_change_amount = new_price - previous_price
+            previous_price = new_price
+            print("Price change: New price is", new_price, "USD and changed", price_change_amount, "USD", "-- UP")
+        else:
+            price_change_amount = 0
 
     #############
     #### BOT ####
