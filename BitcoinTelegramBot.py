@@ -18,14 +18,19 @@ urllib3.disable_warnings()
 
 ## Get the prices from an api
 def get_latest_bitcoin_price(currency):
-    if currency == "usd":
-        response = requests.get("https://api.coindesk.com/v1/bpi/currentprice/USD.json", verify=False)
-        response_json = response.json()
-        return int(response_json["bpi"]["USD"]["rate_float"])
-    else:
-        response = requests.get("https://api.coindesk.com/v1/bpi/currentprice/EUR.json", verify=False)
-        response_json = response.json()
-        return int(response_json["bpi"]["EUR"]["rate_float"])
+    try:
+        if currency == "usd":
+            response = requests.get("https://api.coindesk.com/v1/bpi/currentprice/USD.json", verify=False)
+            response_json = response.json()
+            return int(response_json["bpi"]["USD"]["rate_float"])
+        else:
+            response = requests.get("https://api.coindesk.com/v1/bpi/currentprice/EUR.json", verify=False)
+            response_json = response.json()
+            return int(response_json["bpi"]["EUR"]["rate_float"])
+    except:
+        print("Error: Coindesk API failed!")
+        return False
+
 
 ##################
 ## Bot methods  ##
@@ -33,13 +38,22 @@ def get_latest_bitcoin_price(currency):
 
 ## Get updates from bot
 def get_messages(offset_func):
-    offset_url = "https://api.telegram.org/bot" + str(bot_token) + "/getUpdates?offset=" + offset_func
-    bot_messages = requests.get(offset_url)
-    return bot_messages.json()
+    try:
+        offset_url = "https://api.telegram.org/bot" + str(bot_token) + "/getUpdates?offset=" + offset_func
+        bot_messages = requests.get(offset_url)
+        return bot_messages.json()
+    except:
+        print("Error: Telegram API failed!")
+        return False
 
 ## Send message to a chat
 def send_message(chat, message_func):
-    requests.get("https://api.telegram.org/bot" + str(bot_token) + "/sendMessage?chat_id=" + str(chat) + "&text=" + str(message_func))
+    try:
+        requests.get("https://api.telegram.org/bot" + str(bot_token) + "/sendMessage?chat_id=" + str(chat) + "&text=" + str(message_func))
+        return True
+    except:
+        print("Error: Could not set message!")
+        return False
 
 ####################
 ## Bitmex methods ##
@@ -193,17 +207,20 @@ while True:
     print(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
 
     ## Get new price from api
-    new_price = get_latest_bitcoin_price("usd")
+    try:
+        new_price = get_latest_bitcoin_price("usd")
+    except:
+        new_price = previous_price
 
     ## Print price changes to console
     if new_price < previous_price:
         price_change_amount = new_price - previous_price
         previous_price = new_price
-        print("Price change: New price is", get_latest_bitcoin_price("usd"), "USD and changed", price_change_amount, "USD", "-- DOWN")
+        print("Price change: New price is", new_price, "USD and changed", price_change_amount, "USD", "-- DOWN")
     elif new_price > previous_price:
         price_change_amount = new_price - previous_price
         previous_price = new_price
-        print("Price change: New price is", get_latest_bitcoin_price("usd"), "USD and changed", price_change_amount, "USD", "-- UP")
+        print("Price change: New price is", new_price, "USD and changed", price_change_amount, "USD", "-- UP")
     else:
         price_change_amount = 0
 
@@ -394,11 +411,10 @@ while True:
     while mon_loop < 13:
         ## Get updates from bot
         bot_messages_json = get_messages(offset)
-
         ## Check the amount of messages received
         try:
             message_amount = len(bot_messages_json["result"])
-        except KeyError:
+        except KeyError and TypeError:
             message_amount = 0
 
         ## Check messages if exists
