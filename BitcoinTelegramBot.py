@@ -32,7 +32,6 @@ def get_latest_bitcoin_price(currency, source):
                 return int(response_json["bpi"]["EUR"]["rate_float"])
         except:
             print("Error: Coindesk API failed!")
-            return False
 
     ## Price source Bitmex
     if source == "bitmex":
@@ -42,7 +41,6 @@ def get_latest_bitcoin_price(currency, source):
             return int(response_json[0]["price"])
         except:
             print("Error: Bitmex price API failed!")
-            return False
 
 ##################
 ## Bot methods  ##
@@ -221,10 +219,16 @@ while True:
     print(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
 
     ## Get new price from api
-    try:
-        new_price = get_latest_bitcoin_price("usd", price_source)
-    except:
-        new_price = previous_price
+    new_price = get_latest_bitcoin_price("usd", price_source)
+
+    ## If the API did not return a price - ask for help
+    if not new_price:
+        message = "Error: Got no new price! Help!"
+        ## Send message to the admin user (first user)
+        print("Reported to Admin: " + str(userlist[0][1]))
+        send_message(userlist[0][1], message)
+        sleep(10)
+        continue
 
     ## Print price changes to console
     if log_pricemoves:
