@@ -66,9 +66,14 @@ def get_bitmex_position(bitmex_client_func, askedValue):
         ## Unrealised PNL
         unrealisedPnl = result_json["unrealisedPnl"] / 100000000
         unrealisedPnl = round(unrealisedPnl, 6)
-        ## Rebalanced PNL
-        rebalancedPnl = result_json["rebalancedPnl"] / 10000000
+        ## realised PNL
+        realisedPnl = result_json["realisedPnl"] / 100000000
+        realisedPnl = round(realisedPnl, 6)
+        ## rebalanced PNL
+        rebalancedPnl = result_json["rebalancedPnl"] / 100000000
         rebalancedPnl = round(rebalancedPnl, 6)
+        ## Full PNL = unrealisedPnl + realised + rebalancedPnl
+        fullPnl = unrealisedPnl + realisedPnl + rebalancedPnl
         ## Break even price
         breakEvenPrice = int(result_json["breakEvenPrice"])
         ## Last price
@@ -87,7 +92,7 @@ def get_bitmex_position(bitmex_client_func, askedValue):
 
         ## Return the open position and stats
         if askedValue == "openPosition":
-            openPosition = long_short + " position: " + str(currentQty) + " | Open PNL: " + str(unrealisedPnl) + "\nFull PNL: " + str(rebalancedPnl) + " | Break even: " + str(breakEvenPrice) + " (" + str(diff_break_even) + ")"
+            openPosition = long_short + " position: " + str(currentQty) + " | Open PNL: " + str(unrealisedPnl)[:8] + "\nFull PNL: " + str(fullPnl)[:8] + " | Break even: " + str(breakEvenPrice) + " (" + str(diff_break_even) + ")"
             return openPosition
         ## Return the position size
         if askedValue == "currentQty":
