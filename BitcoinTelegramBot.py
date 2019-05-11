@@ -137,6 +137,7 @@ config.read("./config.cfg")
 
 ## Get general configs
 bot_token = config.get("General", "bot_token")
+report_chan = config.get("General", "report_chan")
 
 ## Get user configs
 userlist_import = config.get("General", "userlist")
@@ -147,9 +148,11 @@ user_position = 0
 for user in userlist:
 
     user_chat_id = user
+    username = config.get(user, "username")
     history_length = int(config.get(user, "history_length"))
     divider = int(config.get(user, "divider"))
     interval_check = config.getboolean(user, "interval_check")
+    report_active = config.getboolean(user, "report_active")
     bitmex_active = config.getboolean(user, "bitmex_active")
     bitmex_key = config.get(user, "bitmex_api_key")
     bitmex_secret = config.get(user, "bitmex_secret")
@@ -172,7 +175,7 @@ for user in userlist:
         else:
             ## Client is not valid - deactivate Bitmex
             bitmex_active = False
-    settings = [user_position, user_chat_id, history_length, divider, interval_check, bitmex_active, bitmex_key, bitmex_secret, history, announced_price, bitmex_client, bitmex_position_amount, ask_price_steps, ask_bitmex_key, ask_bitmex_secret, bitmex_testnet]
+    settings = [user_position, user_chat_id, history_length, divider, interval_check, bitmex_active, bitmex_key, bitmex_secret, history, announced_price, bitmex_client, bitmex_position_amount, ask_price_steps, ask_bitmex_key, ask_bitmex_secret, bitmex_testnet, username, report_active]
     userlist[user_position] = settings
     user_position = user_position + 1
 
@@ -182,6 +185,7 @@ for user in userlist:
 
 offset = "-0"
 messages = []
+messages_report_chan = []
 write_config = False
 bot_restarted = True
 previous_price = 0
@@ -257,6 +261,8 @@ while True:
         bitmex_active = user[5]
         interval_check = user[4]
         announced_price = user[9]
+        username = user[16]
+        report_active = user[17]
 
         ## Check if the user has an open Bitmex position
         if bitmex_active:
@@ -361,43 +367,51 @@ while True:
                 if bitmex_position_amount_new > 0:
                     ## Announce if position was reduced
                     if bitmex_position_amount_new < bitmex_position_amount:
-                        message = "Reduced long position by " + str(bitmex_position_amount_change)
+                        message = "Reduced long position by " + str(bitmex_position_amount_change) + " @ " + str(new_price)
                         print(message)
                         messages.append(message)
+                        messages_report_chan.append(message)
                         ## Announce new position and PNL
                         message = bitmex_open_position
                         print(message)
                         messages.append(message)
+                        messages_report_chan.append(message)
                     ## Announce if position was increased
                     elif bitmex_position_amount_new > bitmex_position_amount:
-                        message = "Increased long position by " + str(bitmex_position_amount_change)
+                        message = "Increased long position by " + str(bitmex_position_amount_change) + " @ " + str(new_price)
                         print(message)
                         messages.append(message)
+                        messages_report_chan.append(message)
                         ## Announce new position and PNL
                         message = bitmex_open_position
                         print(message)
                         messages.append(message)
+                        messages_report_chan.append(message)
 
                 ## Position is a short
                 else:
                     ## Announce if position was reduced
                     if bitmex_position_amount_new > bitmex_position_amount:
-                        message = "Reduced short position by " + str(bitmex_position_amount_change)
+                        message = "Reduced short position by " + str(bitmex_position_amount_change) + " @ " + str(new_price)
                         print(message)
                         messages.append(message)
+                        messages_report_chan.append(message)
                         ## Announce new position and PNL
                         message = bitmex_open_position
                         print(message)
                         messages.append(message)
+                        messages_report_chan.append(message)
                     ## Announce if position was increased
                     elif bitmex_position_amount_new < bitmex_position_amount:
-                        message = "Increased short position by " + str(bitmex_position_amount_change)
+                        message = "Increased short position by " + str(bitmex_position_amount_change) + " @ " + str(new_price)
                         print(message)
                         messages.append(message)
+                        messages_report_chan.append(message)
                         ## Announce new position and PNL
                         message = bitmex_open_position
                         print(message)
                         messages.append(message)
+                        messages_report_chan.append(message)
                 ## Set new Bitmex position amount
                 user[11] = bitmex_position_amount_new
 
@@ -419,6 +433,18 @@ while True:
                 all_messages = all_messages + "\n" + x
             send_message(user[1], all_messages)
             messages = []
+
+        ## If there are messages, sent them to the report channel
+        if messages_report_chan and report_chan:
+            if report_active:
+                report_user = "User: " + str(username)
+                messages_report_chan.insert(0, report_user)
+                print("Sending messages to the report channel for user: " + str(user[1]))
+                all_messages = ""
+                for x in messages_report_chan:
+                    all_messages = all_messages + "\n" + x
+                send_message(report_chan, all_messages)
+                messages_report_chan = []
 
     #####################
     ## Chat monitoring ##
@@ -480,9 +506,11 @@ while True:
                             ## Create new user section with basic settings
                             f = open("config.cfg", "a+")
                             f.write("[" + str(check_user) + "]\n")
+                            f.write("username = Anonymous\n")
                             f.write("history_length = 15\n")
                             f.write("divider = 25\n")
                             f.write("interval_check = False\n")
+                            f.write("report_active = False\n")
                             f.write("announced_price = 0\n")
                             f.write("bitmex_active = False\n")
                             f.write("bitmex_api_key = \n")
@@ -519,6 +547,8 @@ while True:
                         ask_price_steps = userlist[find_user_index][12]
                         ask_bitmex_key = userlist[find_user_index][13]
                         ask_bitmex_secret = userlist[find_user_index][14]
+                        username = userlist[find_user_index][16]
+                        report_active = userlist[find_user_index][17]
 
                         ## Update the message counter
                         message_counter = message_counter + 1
@@ -745,6 +775,33 @@ while True:
                                 message = "Activated Testnet - make sure to set the right API Keys\nUse /toggle_bitmex afterwards!"
                                 print(message)
                                 messages.append(message)
+
+                        ## Toggle reporting
+                        if splitted[0] == "/toggle_report":
+                            if report_active:
+                                report_active = False
+                                userlist[find_user_index][17] = False
+                                config.set(str(check_user), 'report_active', report_active)
+                                write_config = True
+                                message = "Deactivated reporting!"
+                                print(message)
+                                messages.append(message)
+                                ## Let the other user know that the user deactivated the reporting
+                                message_report = str(username) + " deactivated reporting!"
+                                print(message_report)
+                                send_message(report_chan, message_report)
+                            else:
+                                report_active = True
+                                userlist[find_user_index][17] = True
+                                config.set(str(check_user), 'report_active', report_active)
+                                write_config = True
+                                message = "Activated reporting!"
+                                print(message)
+                                messages.append(message)
+                                ## Let the other user know that the user activated the reporting
+                                message_report = str(username) + " activated reporting!"
+                                print(message_report)
+                                send_message(report_chan, message_report)
 
                         #####################
                         ## End of commands ##
