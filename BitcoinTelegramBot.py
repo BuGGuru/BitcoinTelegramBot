@@ -115,15 +115,21 @@ def get_bitmex_position(bitmex_client_func, askedValue):
             long_short = "Short"
 
         ## Return the open position and stats
-        if askedValue == "openPosition":
+        if askedValue == "openPosition" and currentQty != 0:
             openPosition = long_short + " position: " + str(currentQty) + " | Open PNL: " + str(unrealisedPnl)[:8] + "\nFull PNL: " + str(fullPnl)[:8] + " | Break even: " + str(breakEvenPrice) + " (" + str(diff_break_even) + ")"
             return openPosition
+        elif askedValue == "openPosition":
+            openPosition = "No open position at the moment."
+            return openPosition
+
         ## Return the position size
         if askedValue == "currentQty":
             return currentQty
+
         ## return the unrealisedPnl
         if askedValue == "unrealisedPnl":
             return unrealisedPnl
+
     except IndexError or AttributeError:
         return "No open position!"
 
@@ -298,7 +304,7 @@ while True:
                     ## Announce open position if Bitmex is active
                     if bitmex_active:
                         # noinspection PyUnboundLocalVariable
-                        message = bitmex_open_position
+                        message = str(bitmex_open_position + "\n")
                         print(message)
                         messages.append(message)
 
@@ -318,7 +324,7 @@ while True:
 
                     ## Announce open position if Bitmex is active
                     if bitmex_active:
-                        message = bitmex_open_position
+                        message = str(bitmex_open_position + "\n")
                         print(message)
                         messages.append(message)
 
