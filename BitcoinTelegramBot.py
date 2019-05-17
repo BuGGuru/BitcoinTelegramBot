@@ -199,6 +199,7 @@ interval_count = 0
 price_source = "bitmex"
 log_pricemoves = False
 devmode = False
+price_error_count = 0
 
 ##################
 ## Pre-warm Bot ##
@@ -233,10 +234,14 @@ while True:
 
     ## If the API did not return a price - ask for help
     if not new_price:
-        message = "Error: Got no new price! Help!"
-        ## Send message to the admin user (first user)
-        print("Reported to Admin: " + str(userlist[0][1]))
-        send_message(userlist[0][1], message)
+        price_error_count = price_error_count + 1
+        print("Price error!")
+        if price_error_count > 10:
+            message = "Error: Got no new price! Help!"
+            ## Send message to the admin user (first user)
+            print("Reported to Admin: " + str(userlist[0][1]))
+            send_message(userlist[0][1], message)
+            price_error_count = 0
         sleep(10)
         continue
 
