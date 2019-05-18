@@ -85,6 +85,10 @@ def get_bitmex_position(bitmex_client_func, askedValue):
     try:
         ## Get data from Bitmex - filtered for XBT positions
         result = bitmex_client_func.Position.Position_get(filter=json.dumps({'symbol': 'XBTUSD'})).result()
+
+        global bitmex_rate_limit
+        bitmex_rate_limit = int(result[1].headers["X-RateLimit-Remaining"])
+
         ## Parse first position found
         result_json = result[0][0]
         ## Unrealised PNL
@@ -200,6 +204,7 @@ price_source = "bitmex"
 log_pricemoves = False
 devmode = False
 price_error_count = 0
+bitmex_rate_limit = 300
 
 ##################
 ## Pre-warm Bot ##
@@ -244,6 +249,9 @@ while True:
             price_error_count = 0
         sleep(10)
         continue
+
+    ## Reset error count since we got a new price
+    price_error_count = 0
 
     ## Print price changes to console
     if log_pricemoves:
@@ -345,7 +353,7 @@ while True:
         ## Interval check ##
         #####################
 
-        if interval_count == 60:
+        if interval_count == 1200:
             message = "Interval check - the price is " + str(new_price) + " USD"
             print(message)
             # Announce interval check if active
@@ -464,7 +472,7 @@ while True:
     ## Let the bot monitor for at least 65 Sec.
     ## To avoid api limitations
     mon_loop = 0
-    while mon_loop < 13:
+    while mon_loop < 1:
         ## Get updates from bot
         bot_messages_json = get_messages(offset)
         ## Check the amount of messages received
@@ -518,7 +526,7 @@ while True:
                             f = open("config.cfg", "a+")
                             f.write("[" + str(check_user) + "]\n")
                             f.write("username = Anonymous\n")
-                            f.write("history_length = 15\n")
+                            f.write("history_length = 60\n")
                             f.write("divider = 25\n")
                             f.write("interval_check = False\n")
                             f.write("report_active = False\n")
@@ -843,11 +851,19 @@ while True:
         ## Loop things
         mon_loop = mon_loop + 1
         bot_restarted = False
-        sleep(5)
+        sleep(1)
 
         #####################
         ## End of mon loop ##
         #####################
+
+        ## Check if we run out of Bitmex API calls. We can do (300 in x seconds)
+        if bitmex_rate_limit < 50:
+            ## Send message to the admin user (first user)
+            message = "Bitmex API calls remaining = " + str(bitmex_rate_limit)
+            send_message(userlist[0][1], message)
+            print(message)
+            print("Reported to Admin: " + str(userlist[0][1]))
 
     ######################
     ## End of main loop ##
