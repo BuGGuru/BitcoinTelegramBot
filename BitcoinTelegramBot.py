@@ -31,7 +31,7 @@ def get_latest_bitcoin_price(currency, source):
                 response_json = response.json()
                 return int(response_json["bpi"]["EUR"]["rate_float"])
         except:
-            print("Error: Coindesk API failed!")
+            log("Error: Coindesk API failed!")
 
     ## Price source Bitmex
     if source == "bitmex":
@@ -40,7 +40,7 @@ def get_latest_bitcoin_price(currency, source):
             response_json = response.json()
             return int(response_json[0]["price"])
         except:
-            print("Error: Bitmex price API failed!")
+            log("Error: Bitmex price API failed!")
 
 ##################
 ## Bot methods  ##
@@ -53,7 +53,7 @@ def get_messages(offset_func):
         bot_messages = requests.get(offset_url)
         return bot_messages.json()
     except:
-        print("Error: Telegram API failed!")
+        log("Error: Telegram API failed!")
         return False
 
 ## Send message to a chat
@@ -62,7 +62,7 @@ def send_message(chat, message_func):
         requests.get("https://api.telegram.org/bot" + str(bot_token) + "/sendMessage?chat_id=" + str(chat) + "&text=" + str(message_func))
         return True
     except:
-        print("Error: Could not set message!")
+        log("Error: Could not set message!")
         return False
 
 ####################
@@ -136,6 +136,10 @@ def get_bitmex_position(bitmex_client_func, askedValue):
 
     except IndexError or AttributeError:
         return "No open position!"
+
+## Log to console
+def log(output):
+    print(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\n" + str(output) + "\n")
 
 #############
 ## Configs ##
@@ -221,9 +225,9 @@ for user in userlist:
 ## Send out restart message if not in dev mode
 if bot_restarted and not devmode:
     message = "The Bot restarted"
-    print(message)
+    log(message)
     ## Send message to the admin user (first user)
-    print("Reported to Admin: " + str(userlist[0][1]))
+    log("Reported to Admin: " + str(userlist[0][1]))
     send_message(userlist[0][1], message)
 
 ###############
@@ -231,20 +235,17 @@ if bot_restarted and not devmode:
 ###############
 
 while True:
-    ## Print the Time to the console
-    print(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
-
     ## Get new price from api
     new_price = get_latest_bitcoin_price("usd", price_source)
 
     ## If the API did not return a price - ask for help
     if not new_price:
         price_error_count = price_error_count + 1
-        print("Price error!")
+        log("Price error!")
         if price_error_count > 10:
             message = "Error: Got no new price! Help!"
             ## Send message to the admin user (first user)
-            print("Reported to Admin: " + str(userlist[0][1]))
+            log("Reported to Admin: " + str(userlist[0][1]))
             send_message(userlist[0][1], message)
             price_error_count = 0
         sleep(10)
@@ -258,11 +259,13 @@ while True:
         if new_price < previous_price:
             price_change_amount = new_price - previous_price
             previous_price = new_price
-            print("Price change: New price is", new_price, "USD and changed", price_change_amount, "USD", "-- DOWN")
+            message = ("Price change: New price is", new_price, "USD and changed", price_change_amount, "USD", "-- DOWN")
+            log(message)
         elif new_price > previous_price:
             price_change_amount = new_price - previous_price
             previous_price = new_price
-            print("Price change: New price is", new_price, "USD and changed", price_change_amount, "USD", "-- UP")
+            message = ("Price change: New price is", new_price, "USD and changed", price_change_amount, "USD", "-- UP")
+            log(message)
         else:
             price_change_amount = 0
 
@@ -307,7 +310,7 @@ while True:
 
                     ## Announce since price not in history
                     message = priceIs + " price level: " + str(new_price_level * divider) + " - " + str(new_price_level * divider + divider)
-                    print(message)
+                    log(message)
                     messages.append(message)
                     ## Update the users announced_price
                     user[9] = new_price
@@ -317,8 +320,8 @@ while True:
                     ## Announce open position if Bitmex is active
                     if bitmex_active:
                         # noinspection PyUnboundLocalVariable
-                        message = str(bitmex_open_position + "\n")
-                        print(message)
+                        message = str(bitmex_open_position)
+                        log(message)
                         messages.append(message)
 
                 ## Check if price is stable
@@ -332,13 +335,13 @@ while True:
 
                     ## Announce since price is stable
                     message = priceIs + " price level: " + str(new_price_level * divider) + " - " + str(new_price_level * divider + divider)
-                    print(message)
+                    log(message)
                     messages.append(message)
 
                     ## Announce open position if Bitmex is active
                     if bitmex_active:
-                        message = str(bitmex_open_position + "\n")
-                        print(message)
+                        message = str(bitmex_open_position)
+                        log(message)
                         messages.append(message)
 
         ##################
@@ -347,7 +350,6 @@ while True:
 
         history.append(new_price_level)
         del history[0]
-        # print("Price level history: " + str(history))
 
         #####################
         ## Interval check ##
@@ -355,14 +357,14 @@ while True:
 
         if interval_count == 1200:
             message = "Interval check - the price is " + str(new_price) + " USD"
-            print(message)
+            log(message)
             # Announce interval check if active
             if interval_check:
                 messages.append(message)
                 ## Announce open position if Bitmex is active
                 if bitmex_active:
                     message = bitmex_open_position
-                    print(message)
+                    log(message)
                     messages.append(message)
             interval_count = 0
         interval_count = interval_count + 1
@@ -387,23 +389,23 @@ while True:
                     ## Announce if position was reduced
                     if bitmex_position_amount_new < bitmex_position_amount:
                         message = "Reduced long position by " + str(bitmex_position_amount_change) + " @ " + str(new_price)
-                        print(message)
+                        log(message)
                         messages.append(message)
                         messages_report_chan.append(message)
                         ## Announce new position and PNL
                         message = bitmex_open_position
-                        print(message)
+                        log(message)
                         messages.append(message)
                         messages_report_chan.append(message)
                     ## Announce if position was increased
                     elif bitmex_position_amount_new > bitmex_position_amount:
                         message = "Increased long position by " + str(bitmex_position_amount_change) + " @ " + str(new_price)
-                        print(message)
+                        log(message)
                         messages.append(message)
                         messages_report_chan.append(message)
                         ## Announce new position and PNL
                         message = bitmex_open_position
-                        print(message)
+                        log(message)
                         messages.append(message)
                         messages_report_chan.append(message)
 
@@ -412,23 +414,23 @@ while True:
                     ## Announce if position was reduced
                     if bitmex_position_amount_new > bitmex_position_amount:
                         message = "Reduced short position by " + str(bitmex_position_amount_change) + " @ " + str(new_price)
-                        print(message)
+                        log(message)
                         messages.append(message)
                         messages_report_chan.append(message)
                         ## Announce new position and PNL
                         message = bitmex_open_position
-                        print(message)
+                        log(message)
                         messages.append(message)
                         messages_report_chan.append(message)
                     ## Announce if position was increased
                     elif bitmex_position_amount_new < bitmex_position_amount:
                         message = "Increased short position by " + str(bitmex_position_amount_change) + " @ " + str(new_price)
-                        print(message)
+                        log(message)
                         messages.append(message)
                         messages_report_chan.append(message)
                         ## Announce new position and PNL
                         message = bitmex_open_position
-                        print(message)
+                        log(message)
                         messages.append(message)
                         messages_report_chan.append(message)
                 ## Set new Bitmex position amount
@@ -446,7 +448,7 @@ while True:
 
         ## If there are messages, sent them to the user
         if messages:
-            print("Sending messages to the chat: " + str(user[1]))
+            log("Sending messages to the chat: " + str(user[1]))
             all_messages = ""
             for x in messages:
                 all_messages = all_messages + "\n" + x
@@ -458,7 +460,7 @@ while True:
             if report_active:
                 report_user = "User: " + str(username)
                 messages_report_chan.insert(0, report_user)
-                print("Sending messages to the report channel for user: " + str(user[1]))
+                log("Sending messages to the report channel for user: " + str(user[1]))
                 all_messages = ""
                 for x in messages_report_chan:
                     all_messages = all_messages + "\n" + x
@@ -494,11 +496,11 @@ while True:
                     ## Catch key error due to other updates than message
                     try:
                         bot_messages_text_single = str(bot_messages_json["result"][message_counter]["message"]["text"])
-                        print("New Message: " + bot_messages_text_single)
+                        log("New Message: " + bot_messages_text_single)
 
                         ## Check who wrote the message
                         check_user = bot_messages_json["result"][message_counter]["message"]["from"]["id"]
-                        print("From user: " + str(check_user))
+                        log("From user: " + str(check_user))
 
                         ## Check if we know the user
                         counter = 0
@@ -584,7 +586,7 @@ while True:
                         if splitted[0] == "/show_settings":
                             ## Tell the user how big the price brackets and if the interval check is enabled
                             message = "Price steps: " + str(divider) + " | Interval check: " + str(interval_check)
-                            print(message)
+                            log(message)
                             messages.append(message)
 
                         ## Tell the user his open bitmex position
@@ -594,15 +596,15 @@ while True:
                                 if bitmex_client:
                                     # noinspection PyTypeChecker
                                     message = get_bitmex_position(bitmex_client, "openPosition")
-                                    print(message)
+                                    log(message)
                                     messages.append(message)
                                 else:
                                     message = "Something went wrong. Ask the Admin!"
-                                    print(message)
+                                    log(message)
                                     messages.append(message)
                             else:
                                 message = "You need to set your API Key and Secret:\n/set_bitmex_key\n/set_bitmex_secret"
-                                print(message)
+                                log(message)
                                 messages.append(message)
 
                         ## The user wants to change the price steps
@@ -615,7 +617,7 @@ while True:
                                     write_config = True
                                     userlist[find_user_index][3] = divider
                                     message = "The price stepping is set to " + str(splitted[1] + " now.")
-                                    print(message)
+                                    log(message)
                                     messages.append(message)
                                     mon_loop = 50
                                 except ValueError:
@@ -635,7 +637,7 @@ while True:
                                 write_config = True
                                 userlist[find_user_index][3] = divider
                                 message = "The price stepping is set to " + str(splitted[0]) + " now."
-                                print(message)
+                                log(message)
                                 messages.append(message)
                                 mon_loop = 50
                                 ask_price_steps = False
@@ -646,7 +648,7 @@ while True:
                                 userlist[find_user_index][12] = True
                                 message = "Tell me your desired price steps in USD as integer"
                                 messages.append(message)
-                                print(message)
+                                log(message)
 
                         ## Listen for Bitmex toggle command
                         if splitted[0] == "/toggle_bitmex":
@@ -673,11 +675,11 @@ while True:
                                         messages.append(message)
                                     else:
                                         message = "You might need to set your API key and Secret:\n/set_bitmex_key\n/set_bitmex_secret\nAfter that, try again!"
-                                        print(message)
+                                        log(message)
                                         messages.append(message)
                             else:
                                 message = "You need to set your API key and Secret:\n/set_bitmex_key\n/set_bitmex_secret"
-                                print(message)
+                                log(message)
                                 messages.append(message)
 
                         ## The user wants to change his Bitmex API Key
@@ -691,7 +693,7 @@ while True:
                                     write_config = True
                                     userlist[find_user_index][6] = bitmex_key
                                     message = "Okay, i saved your Bitmex key. Make sure to set also the secret\n/set_bitmex_secret.\n\nIf you set both you can use:\n/toggle_bitmex\n/show_position"
-                                    print(message)
+                                    log(message)
                                     messages.append(message)
                                     mon_loop = 50
                                 else:
@@ -714,7 +716,7 @@ while True:
                                 userlist[find_user_index][13] = False
                                 userlist[find_user_index][6] = bitmex_key
                                 message = "Okay, i saved your Bitmex key. Make sure you also set the secret\n/set_bitmex_secret.\n\nIf you set both you can use:\n/toggle_bitmex\n/show_position"
-                                print(message)
+                                log(message)
                                 messages.append(message)
                                 mon_loop = 50
                             else:
@@ -723,7 +725,7 @@ while True:
                                 userlist[find_user_index][13] = True
                                 message = "Tell me your Bitmex API key. Be sure you created a read-only API Key on Bitmex."
                                 messages.append(message)
-                                print(message)
+                                log(message)
 
                         ## The user wants to change his Bitmex API secret
                         if splitted[0] == "/set_bitmex_secret":
@@ -736,7 +738,7 @@ while True:
                                     write_config = True
                                     userlist[find_user_index][7] = bitmex_secret
                                     message = "Okay, i saved your Bitmex secret. Make sure to set also the key\n/set_bitmex_key.\n\nIf you set both you can use:\n/toggle_bitmex\n/show_position"
-                                    print(message)
+                                    log(message)
                                     messages.append(message)
                                     mon_loop = 50
                                 else:
@@ -759,7 +761,7 @@ while True:
                                 userlist[find_user_index][14] = False
                                 userlist[find_user_index][7] = bitmex_secret
                                 message = "Okay, i saved your Bitmex secret. Make sure you also set the key\n/set_bitmex_key\n\nIf you set both you can use:\n/toggle_bitmex\n/show_position"
-                                print(message)
+                                log(message)
                                 messages.append(message)
                                 mon_loop = 50
                             else:
@@ -768,12 +770,12 @@ while True:
                                 userlist[find_user_index][14] = True
                                 message = "Tell me your Bitmex API secret. Be sure you created a read-only API key on Bitmex."
                                 messages.append(message)
-                                print(message)
+                                log(message)
 
                         ## Tell the user the real price
                         if splitted[0] == "/show_real_price":
                             message = "The BTC price is: " + str(new_price) + " USD"
-                            print(message)
+                            log(message)
                             messages.append(message)
 
                         ## Toggle Testnet
@@ -784,7 +786,7 @@ while True:
                                 config.set(str(check_user), 'bitmex_testnet', bitmex_testnet)
                                 write_config = True
                                 message = "Activated Mainnet  - make sure to set the right API Keys\nUse /toggle_bitmex afterwards!"
-                                print(message)
+                                log(message)
                                 messages.append(message)
                             else:
                                 bitmex_testnet = True
@@ -792,7 +794,7 @@ while True:
                                 config.set(str(check_user), 'bitmex_testnet', bitmex_testnet)
                                 write_config = True
                                 message = "Activated Testnet - make sure to set the right API Keys\nUse /toggle_bitmex afterwards!"
-                                print(message)
+                                log(message)
                                 messages.append(message)
 
                         ## Toggle reporting
@@ -803,11 +805,11 @@ while True:
                                 config.set(str(check_user), 'report_active', report_active)
                                 write_config = True
                                 message = "Deactivated reporting!"
-                                print(message)
+                                log(message)
                                 messages.append(message)
                                 ## Let the other user know that the user deactivated the reporting
                                 message_report = str(username) + " deactivated reporting!"
-                                print(message_report)
+                                log(message_report)
                                 send_message(report_chan, message_report)
                             else:
                                 report_active = True
@@ -815,11 +817,11 @@ while True:
                                 config.set(str(check_user), 'report_active', report_active)
                                 write_config = True
                                 message = "Activated reporting!"
-                                print(message)
+                                log(message)
                                 messages.append(message)
                                 ## Let the other user know that the user activated the reporting
                                 message_report = str(username) + " activated reporting!"
-                                print(message_report)
+                                log(message_report)
                                 send_message(report_chan, message_report)
 
                         #####################
@@ -834,7 +836,7 @@ while True:
 
                         ## Send collected messages
                         if messages:
-                            print("Sending collected messages to the chat: " + str(check_user))
+                            log("Sending collected messages to the chat: " + str(check_user))
                             all_messages = ""
                             for x in messages:
                                 all_messages = all_messages + "\n" + x
@@ -843,7 +845,7 @@ while True:
 
                     ## Discard all other messages
                     except KeyError:
-                        print("Another type of message received")
+                        log("Another type of message received")
 
             ## Set new offset to acknowledge messages on the telegram api
             offset = str(bot_messages_json["result"][message_amount - 1]["update_id"] + 1)
@@ -862,8 +864,8 @@ while True:
             ## Send message to the admin user (first user)
             message = "Bitmex API calls remaining = " + str(bitmex_rate_limit)
             send_message(userlist[0][1], message)
-            print(message)
-            print("Reported to Admin: " + str(userlist[0][1]))
+            log(message)
+            log("Reported to Admin: " + str(userlist[0][1]))
 
     ######################
     ## End of main loop ##
