@@ -1,6 +1,7 @@
 ######################
 ## BTC TELEGRAM BOT ##
 ######################
+import time
 from time import sleep
 import configparser
 import requests
@@ -139,7 +140,16 @@ def get_bitmex_position(bitmex_client_func, askedValue):
 
 ## Log to console
 def log(output):
-    print(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\n" + str(output) + "\n")
+
+    global last_log
+
+    ## Print new Timestamp in log if last log is older than 5 seconds
+    if time.time() - last_log > 5:
+        print("\n-------------------\n" + datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\n-------------------\n" + str(output))
+        last_log = time.time()
+    else:
+        print(str(output))
+        last_log = time.time()
 
 #############
 ## Configs ##
@@ -229,6 +239,7 @@ price_source = "bitmex"
 log_pricemoves = False
 price_error_count = 0
 bitmex_rate_limit = 300
+last_log = 0
 
 ##################
 ## Pre-warm Bot ##
