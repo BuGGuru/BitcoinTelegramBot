@@ -152,6 +152,7 @@ config.read("./config.cfg")
 ## Get general configs
 bot_token = config.get("General", "bot_token")
 report_chan = config.get("General", "report_chan")
+devmode = config.get("General", "devmode")
 
 ## Get user configs
 userlist_import = config.get("General", "userlist")
@@ -189,7 +190,27 @@ for user in userlist:
         else:
             ## Client is not valid - deactivate Bitmex
             bitmex_active = False
-    settings = [user_position, user_chat_id, history_length, divider, interval_check, bitmex_active, bitmex_key, bitmex_secret, history, announced_price, bitmex_client, bitmex_position_amount, ask_price_steps, ask_bitmex_key, ask_bitmex_secret, bitmex_testnet, username, report_active]
+
+    settings = {"user_position": user_position,
+                "user_chat_id": user_chat_id,
+                "history_length": history_length,
+                "divider": divider,
+                "interval_check": interval_check,
+                "bitmex_active": bitmex_active,
+                "bitmex_key": bitmex_key,
+                "bitmex_secret": bitmex_secret,
+                "history": history,
+                "announced_price": announced_price,
+                "bitmex_client": bitmex_client,
+                "bitmex_position_amount": bitmex_position_amount,
+                "ask_price_steps": ask_price_steps,
+                "ask_bitmex_key": ask_bitmex_key,
+                "ask_bitmex_secret": ask_bitmex_secret,
+                "bitmex_testnet": bitmex_testnet,
+                "username": username,
+                "report_active": report_active
+                }
+
     userlist[user_position] = settings
     user_position = user_position + 1
 
@@ -206,7 +227,6 @@ previous_price = 0
 interval_count = 0
 price_source = "bitmex"
 log_pricemoves = False
-devmode = False
 price_error_count = 0
 bitmex_rate_limit = 300
 
@@ -217,18 +237,18 @@ bitmex_rate_limit = 300
 ## Set the price level and fill the history for every user
 for user in userlist:
     ## Last user announced price / user divider
-    price_level = int(user[9]/user[3])
+    price_level = int(user["announced_price"]/user["divider"])
     ## Fill history as long as the user wants
-    while len(user[8]) < user[2]:
-        user[8].append(price_level)
+    while len(user["history"]) < user["history_length"]:
+        user["history"].append(price_level)
 
 ## Send out restart message if not in dev mode
 if bot_restarted and not devmode:
     message = "The Bot restarted"
     log(message)
     ## Send message to the admin user (first user)
-    log("Reported to Admin: " + str(userlist[0][1]))
-    send_message(userlist[0][1], message)
+    log("Reported to Admin: " + str(userlist[0]["user_chat_id"]))
+    send_message(userlist[0]["user_chat_id"], message)
 
 ###############
 ## Main loop ##
@@ -245,8 +265,8 @@ while True:
         if price_error_count > 10:
             message = "Error: Got no new price! Help!"
             ## Send message to the admin user (first user)
-            log("Reported to Admin: " + str(userlist[0][1]))
-            send_message(userlist[0][1], message)
+            log("Reported to Admin: " + str(userlist[0]["user_chat_id"]))
+            send_message(userlist[0]["user_chat_id"], message)
             price_error_count = 0
         sleep(10)
         continue
@@ -276,21 +296,21 @@ while True:
     ## Check every user if an announcement is needed
     for user in userlist:
 
-        ## Get user info in readable variables
-        price_level = user[8][-1]
-        divider = user[3]
-        history = user[8]
-        bitmex_active = user[5]
-        interval_check = user[4]
-        announced_price = user[9]
-        username = user[16]
-        report_active = user[17]
+        ## Shorten variables
+        price_level = user["history"][-1]
+        divider = user["divider"]
+        history = user["history"]
+        bitmex_active = user["bitmex_active"]
+        interval_check = user["interval_check"]
+        announced_price = user["announced_price"]
+        username = user["username"]
+        report_active = user["report_active"]
 
         ## Check if the user has an open Bitmex position
         if bitmex_active:
             ## Try to get Bitmex client
-            if user[10]:
-                bitmex_open_position = get_bitmex_position(user[10], "openPosition")
+            if user["bitmex_client"]:
+                bitmex_open_position = get_bitmex_position(user["bitmex_client"], "openPosition")
             else:
                 bitmex_active = False
 
@@ -313,8 +333,8 @@ while True:
                     log(message)
                     messages.append(message)
                     ## Update the users announced_price
-                    user[9] = new_price
-                    config.set(str(user[1]), "announced_price", new_price)
+                    user["announced_price"] = new_price
+                    config.set(str(user["user_chat_id"]), "announced_price", new_price)
                     write_config = True
 
                     ## Announce open position if Bitmex is active
@@ -374,10 +394,10 @@ while True:
         #############################
 
         if bitmex_active:
-            if user[10]:
+            if user["bitmex_client"]:
                 ## Get position size
-                bitmex_position_amount_new = int(get_bitmex_position(user[10], "currentQty"))
-                bitmex_position_amount = int(user[11])
+                bitmex_position_amount_new = int(get_bitmex_position(user["bitmex_client"], "currentQty"))
+                bitmex_position_amount = int(user["bitmex_position_amount"])
 
                 ## Calculate the difference
                 bitmex_position_amount_change = abs(bitmex_position_amount_new - bitmex_position_amount)
@@ -434,7 +454,7 @@ while True:
                         messages.append(message)
                         messages_report_chan.append(message)
                 ## Set new Bitmex position amount
-                user[11] = bitmex_position_amount_new
+                user["bitmex_position_amount"] = bitmex_position_amount_new
 
                 ## Suppress message if the bot restarted
                 if bot_restarted:
@@ -448,11 +468,11 @@ while True:
 
         ## If there are messages, sent them to the user
         if messages:
-            log("Sending messages to the chat: " + str(user[1]))
+            log("Sending messages to the chat: " + str(user["user_chat_id"]))
             all_messages = ""
             for x in messages:
                 all_messages = all_messages + "\n" + x
-            send_message(user[1], all_messages)
+            send_message(user["user_chat_id"], all_messages)
             messages = []
 
         ## If there are messages, sent them to the report channel
@@ -460,7 +480,7 @@ while True:
             if report_active:
                 report_user = "User: " + str(username)
                 messages_report_chan.insert(0, report_user)
-                log("Sending messages to the report channel for user: " + str(user[1]))
+                log("Sending messages to the report channel for user: " + str(user["user_chat_id"]))
                 all_messages = ""
                 for x in messages_report_chan:
                     all_messages = all_messages + "\n" + x
@@ -506,8 +526,8 @@ while True:
                         counter = 0
                         find_user_index = "None"
                         for user in userlist:
-                            if str(user[1]) == str(check_user):
-                                find_user_index = userlist[counter][0]
+                            if str(user["user_chat_id"]) == str(check_user):
+                                find_user_index = userlist[counter]["user_position"]
                                 break
                             counter = counter + 1
 
@@ -557,19 +577,19 @@ while True:
                             ## Get our of this message
                             break
 
-                        ## Get settings into readable variables
-                        divider = userlist[find_user_index][3]
-                        history_length = userlist[find_user_index][2]
-                        interval_check = userlist[find_user_index][4]
-                        bitmex_key = userlist[find_user_index][6]
-                        bitmex_secret = userlist[find_user_index][7]
-                        bitmex_active = userlist[find_user_index][5]
-                        bitmex_testnet = userlist[find_user_index][15]
-                        ask_price_steps = userlist[find_user_index][12]
-                        ask_bitmex_key = userlist[find_user_index][13]
-                        ask_bitmex_secret = userlist[find_user_index][14]
-                        username = userlist[find_user_index][16]
-                        report_active = userlist[find_user_index][17]
+                        ## Shorten variables
+                        divider = userlist[find_user_index]["divider"]
+                        history_length = userlist[find_user_index]["history_length"]
+                        interval_check = userlist[find_user_index]["interval_check"]
+                        bitmex_key = userlist[find_user_index]["bitmex_key"]
+                        bitmex_secret = userlist[find_user_index]["bitmex_secret"]
+                        bitmex_active = userlist[find_user_index]["bitmex_active"]
+                        bitmex_testnet = userlist[find_user_index]["bitmex_testnet"]
+                        ask_price_steps = userlist[find_user_index]["ask_price_steps"]
+                        ask_bitmex_key = userlist[find_user_index]["ask_bitmex_key"]
+                        ask_bitmex_secret = userlist[find_user_index]["ask_bitmex_secret"]
+                        username = userlist[find_user_index]["username"]
+                        report_active = userlist[find_user_index]["report_active"]
 
                         ## Update the message counter
                         message_counter = message_counter + 1
@@ -615,7 +635,7 @@ while True:
                                     divider = int(splitted[1])
                                     config.set(str(check_user), 'divider', divider)
                                     write_config = True
-                                    userlist[find_user_index][3] = divider
+                                    userlist[find_user_index]["divider"] = divider
                                     message = "The price stepping is set to " + str(splitted[1] + " now.")
                                     log(message)
                                     messages.append(message)
@@ -623,11 +643,11 @@ while True:
                                 except ValueError:
                                     ## The user did not give a valid value for the price steps so ask him
                                     ask_price_steps = True
-                                    userlist[find_user_index][12] = True
+                                    userlist[find_user_index]["ask_price_steps"] = True
                             else:
                                 ## The user did not give a valid value for the price steps so ask him
                                 ask_price_steps = True
-                                userlist[find_user_index][12] = True
+                                userlist[find_user_index]["ask_price_steps"] = True
                         ## If the user got asked for his desired price steps, look for the answer
                         if ask_price_steps:
                             try:
@@ -635,17 +655,17 @@ while True:
                                 divider = int(splitted[0])
                                 config.set(str(check_user), 'divider', divider)
                                 write_config = True
-                                userlist[find_user_index][3] = divider
+                                userlist[find_user_index]["divider"] = divider
                                 message = "The price stepping is set to " + str(splitted[0]) + " now."
                                 log(message)
                                 messages.append(message)
                                 mon_loop = 50
                                 ask_price_steps = False
-                                userlist[find_user_index][12] = False
+                                userlist[find_user_index]["ask_price_steps"] = False
                             ## The user did not give a valid value for the price steps so ask him
                             except ValueError:
                                 ask_price_steps = True
-                                userlist[find_user_index][12] = True
+                                userlist[find_user_index]["ask_price_steps"] = True
                                 message = "Tell me your desired price steps in USD as integer"
                                 messages.append(message)
                                 log(message)
@@ -657,7 +677,7 @@ while True:
                                 ## Deactivate Bitmex if it is enabled
                                 if bitmex_active:
                                     bitmex_active = False
-                                    userlist[find_user_index][5] = False
+                                    userlist[find_user_index]["bitmex_active"] = False
                                     config.set(str(check_user), "bitmex_active", "False")
                                     write_config = True
                                     message = "Bitmex disabled"
@@ -666,9 +686,9 @@ while True:
                                 else:
                                     bitmex_client = get_bitmex_client(bitmex_testnet, bitmex_key, bitmex_secret)
                                     if bitmex_client:
-                                        userlist[find_user_index][10] = bitmex_client
+                                        userlist[find_user_index]["bitmex_client"] = bitmex_client
                                         bitmex_active = True
-                                        userlist[find_user_index][5] = True
+                                        userlist[find_user_index]["bitmex_active"] = True
                                         config.set(str(check_user), "bitmex_active", "True")
                                         write_config = True
                                         message = "Bitmex enabled"
@@ -691,7 +711,7 @@ while True:
                                     bitmex_key = str(splitted[1])
                                     config.set(str(check_user), 'bitmex_api_key', bitmex_key)
                                     write_config = True
-                                    userlist[find_user_index][6] = bitmex_key
+                                    userlist[find_user_index]["bitmex_key"] = bitmex_key
                                     message = "Okay, i saved your Bitmex key. Make sure to set also the secret\n/set_bitmex_secret.\n\nIf you set both you can use:\n/toggle_bitmex\n/show_position"
                                     log(message)
                                     messages.append(message)
@@ -699,11 +719,11 @@ while True:
                                 else:
                                     ## The user did not give a valid value for the Bitmex key so ask him
                                     ask_bitmex_key = True
-                                    userlist[find_user_index][13] = True
+                                    userlist[find_user_index]["ask_bitmex_key"] = True
                             else:
                                 ## The user did not give a valid value for the Bitmex key so ask him
                                 ask_bitmex_key = True
-                                userlist[find_user_index][13] = True
+                                userlist[find_user_index]["ask_bitmex_key"] = True
                         ## If the user got asked for the Bitmex key, look for the answer
                         if ask_bitmex_key:
                             ## Look for a valid value for the Bitmex key
@@ -713,8 +733,8 @@ while True:
                                 config.set(str(check_user), 'bitmex_api_key', bitmex_key)
                                 write_config = True
                                 ask_bitmex_key = False
-                                userlist[find_user_index][13] = False
-                                userlist[find_user_index][6] = bitmex_key
+                                userlist[find_user_index]["ask_bitmex_key"] = False
+                                userlist[find_user_index]["bitmex_key"] = bitmex_key
                                 message = "Okay, i saved your Bitmex key. Make sure you also set the secret\n/set_bitmex_secret.\n\nIf you set both you can use:\n/toggle_bitmex\n/show_position"
                                 log(message)
                                 messages.append(message)
@@ -722,7 +742,7 @@ while True:
                             else:
                                 ## The user did not give a valid value for the Bitmex key so ask him
                                 ask_bitmex_key = True
-                                userlist[find_user_index][13] = True
+                                userlist[find_user_index]["ask_bitmex_key"] = True
                                 message = "Tell me your Bitmex API key. Be sure you created a read-only API Key on Bitmex."
                                 messages.append(message)
                                 log(message)
@@ -736,7 +756,7 @@ while True:
                                     bitmex_key = str(splitted[1])
                                     config.set(str(check_user), 'bitmex_secret', bitmex_secret)
                                     write_config = True
-                                    userlist[find_user_index][7] = bitmex_secret
+                                    userlist[find_user_index]["bitmex_secret"] = bitmex_secret
                                     message = "Okay, i saved your Bitmex secret. Make sure to set also the key\n/set_bitmex_key.\n\nIf you set both you can use:\n/toggle_bitmex\n/show_position"
                                     log(message)
                                     messages.append(message)
@@ -744,11 +764,11 @@ while True:
                                 else:
                                     ## The user did not give a valid value for the Bitmex secret so ask him
                                     ask_bitmex_secret = True
-                                    userlist[find_user_index][14] = True
+                                    userlist[find_user_index]["ask_bitmex_secret"] = True
                             else:
                                 ## The user did not give a valid value for the Bitmex secret so ask him
                                 ask_bitmex_secret = True
-                                userlist[find_user_index][14] = True
+                                userlist[find_user_index]["ask_bitmex_secret"] = True
                         ## If the user got asked for the Bitmex secret, look for the answer
                         if ask_bitmex_secret:
                             ## Look for a valid value for the Bitmex secret
@@ -758,8 +778,8 @@ while True:
                                 config.set(str(check_user), 'bitmex_secret', bitmex_secret)
                                 write_config = True
                                 ask_bitmex_secret = False
-                                userlist[find_user_index][14] = False
-                                userlist[find_user_index][7] = bitmex_secret
+                                userlist[find_user_index]["ask_bitmex_secret"] = False
+                                userlist[find_user_index]["bitmex_secret"] = bitmex_secret
                                 message = "Okay, i saved your Bitmex secret. Make sure you also set the key\n/set_bitmex_key\n\nIf you set both you can use:\n/toggle_bitmex\n/show_position"
                                 log(message)
                                 messages.append(message)
@@ -767,7 +787,7 @@ while True:
                             else:
                                 ## The user did not give a valid value for the Bitmex key so ask him
                                 ask_bitmex_secret = True
-                                userlist[find_user_index][14] = True
+                                userlist[find_user_index]["ask_bitmex_secret"] = True
                                 message = "Tell me your Bitmex API secret. Be sure you created a read-only API key on Bitmex."
                                 messages.append(message)
                                 log(message)
@@ -782,7 +802,7 @@ while True:
                         if splitted[0] == "/toggle_testnet":
                             if bitmex_testnet:
                                 bitmex_testnet = False
-                                userlist[find_user_index][15] = False
+                                userlist[find_user_index]["bitmex_testnet"] = False
                                 config.set(str(check_user), 'bitmex_testnet', bitmex_testnet)
                                 write_config = True
                                 message = "Activated Mainnet  - make sure to set the right API Keys\nUse /toggle_bitmex afterwards!"
@@ -790,7 +810,7 @@ while True:
                                 messages.append(message)
                             else:
                                 bitmex_testnet = True
-                                userlist[find_user_index][15] = True
+                                userlist[find_user_index]["bitmex_testnet"] = True
                                 config.set(str(check_user), 'bitmex_testnet', bitmex_testnet)
                                 write_config = True
                                 message = "Activated Testnet - make sure to set the right API Keys\nUse /toggle_bitmex afterwards!"
@@ -801,7 +821,7 @@ while True:
                         if splitted[0] == "/toggle_report":
                             if report_active:
                                 report_active = False
-                                userlist[find_user_index][17] = False
+                                userlist[find_user_index]["report_active"] = False
                                 config.set(str(check_user), 'report_active', report_active)
                                 write_config = True
                                 message = "Deactivated reporting!"
@@ -813,7 +833,7 @@ while True:
                                 send_message(report_chan, message_report)
                             else:
                                 report_active = True
-                                userlist[find_user_index][17] = True
+                                userlist[find_user_index]["report_active"] = True
                                 config.set(str(check_user), 'report_active', report_active)
                                 write_config = True
                                 message = "Activated reporting!"
@@ -863,9 +883,9 @@ while True:
         if bitmex_rate_limit < 50:
             ## Send message to the admin user (first user)
             message = "Bitmex API calls remaining = " + str(bitmex_rate_limit)
-            send_message(userlist[0][1], message)
+            send_message(userlist[0]["user_chat_id"], message)
             log(message)
-            log("Reported to Admin: " + str(userlist[0][1]))
+            log("Reported to Admin: " + str(userlist[0]["user_chat_id"]))
 
     ######################
     ## End of main loop ##
