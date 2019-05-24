@@ -143,6 +143,33 @@ def get_bitmex_position(bitmex_client_func, askedValue):
     except IndexError or AttributeError:
         return "No open position!"
 
+## Get user balance
+def get_bitmex_balance(bitmex_client_func, askedValue):
+    try:
+        ## Get User balance from Bitmex
+        result = bitmex_client_func.User.User_getMargin().result()
+        result_json = result[0]
+
+        ## Wallet balance
+        walletBalance = result_json["walletBalance"] / 100000000
+        walletBalance = round(walletBalance, 6)
+
+        ## Margin balance = Wallet balance after position close
+        marginBalance = result_json["marginBalance"] / 100000000
+        marginBalance = round(marginBalance, 6)
+
+        ## Return the wallet balance
+        if askedValue == "walletBalance":
+            return walletBalance
+
+        ## Return the margin balance
+        if askedValue == "marginBalance":
+            return marginBalance
+
+    except IndexError or AttributeError:
+        return "No data received!"
+
+
 ## Log to console
 def log(output):
 
@@ -650,6 +677,31 @@ while True:
                                     message = get_bitmex_position(bitmex_client, "openPosition")
                                     log(message)
                                     messages.append(message)
+                                else:
+                                    message = "Something went wrong. Ask the Admin!"
+                                    log(message)
+                                    messages.append(message)
+                            else:
+                                message = "You need to set your API Key and Secret:\n/set_bitmex_key\n/set_bitmex_secret"
+                                log(message)
+                                messages.append(message)
+
+                        ## Tell the user his bitmex balance
+                        if splitted[0] == "/show_bitmex_balance":
+                            if bitmex_key and bitmex_secret:
+                                bitmex_client = get_bitmex_client(bitmex_testnet, bitmex_key, bitmex_secret)
+                                if bitmex_client:
+                                    # noinspection PyTypeChecker
+                                    wallet_balance = get_bitmex_balance(bitmex_client, "walletBalance")
+                                    margin_balance = get_bitmex_balance(bitmex_client, "marginBalance")
+                                    message = "Your wallet balance: " + str(wallet_balance)
+                                    log(message)
+                                    messages.append(message)
+                                    ## Margin balance if open position
+                                    if wallet_balance != margin_balance:
+                                        message = "After position close.: " + str(margin_balance)
+                                        log(message)
+                                        messages.append(message)
                                 else:
                                     message = "Something went wrong. Ask the Admin!"
                                     log(message)
