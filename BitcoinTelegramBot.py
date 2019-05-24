@@ -111,6 +111,9 @@ def get_bitmex_position(bitmex_client_func, askedValue):
         diff_break_even = abs(breakEvenPrice - lastPrice)
         ## Position size
         currentQty = result_json["currentQty"]
+        ## Last closed position
+        prevRealisedPnl = result_json["prevRealisedPnl"] / 100000000
+        prevRealisedPnl = round(prevRealisedPnl, 6)
 
         ## Long or Short
         long_short = "No Position!"
@@ -124,16 +127,18 @@ def get_bitmex_position(bitmex_client_func, askedValue):
             openPosition = long_short + " position: " + str(currentQty) + " | Open PNL: " + str(unrealisedPnl)[:8] + "\nFull PNL: " + str(fullPnl)[:8] + " | Break even: " + str(breakEvenPrice) + " (" + str(diff_break_even) + ")"
             return openPosition
         elif askedValue == "openPosition":
-            openPosition = "No open position at the moment."
+            openPosition = "No open position at the moment.\nLast position PNL: " + str(prevRealisedPnl)
             return openPosition
 
         ## Return the position size
         if askedValue == "currentQty":
             return currentQty
-
-        ## return the unrealisedPnl
+        ## Return the unrealisedPnl
         if askedValue == "unrealisedPnl":
             return unrealisedPnl
+        ## Return the prevRealisedPnl
+        if askedValue == "prevRealisedPnl":
+            return prevRealisedPnl
 
     except IndexError or AttributeError:
         return "No open position!"
@@ -413,10 +418,25 @@ while True:
                 ## Calculate the difference
                 bitmex_position_amount_change = abs(bitmex_position_amount_new - bitmex_position_amount)
 
-                ## Increased and reduced is based on long or short
+                ## Check if position was closed or just changed
+                if bitmex_position_amount_new == 0 and bitmex_position_amount != 0:
+                    ## Position was closed - check if long or short
+                    if bitmex_position_amount > 0:
+                        ## Announce closure of long position
+                        message = "Closed long position @ " + str(new_price) + "\nPNL: " + str(get_bitmex_position(user["bitmex_client"], "prevRealisedPnl"))
+                        log(message)
+                        messages.append(message)
+                        messages_report_chan.append(message)
+                    elif bitmex_position_amount < 0:
+                        ## Announce closure of short position
+                        message = "Closed short position @ " + str(new_price) + "\nPNL: " + str(get_bitmex_position(user["bitmex_client"], "prevRealisedPnl"))
+                        log(message)
+                        messages.append(message)
+                        messages_report_chan.append(message)
 
+                ## Increased and reduced is based on long or short
                 ## If position is a long
-                if bitmex_position_amount_new > 0:
+                elif bitmex_position_amount_new > 0:
                     ## Announce if position was reduced
                     if bitmex_position_amount_new < bitmex_position_amount:
                         message = "Reduced long position by " + str(bitmex_position_amount_change) + " @ " + str(new_price)
@@ -464,6 +484,7 @@ while True:
                         log(message)
                         messages.append(message)
                         messages_report_chan.append(message)
+
                 ## Set new Bitmex position amount
                 user["bitmex_position_amount"] = bitmex_position_amount_new
 
