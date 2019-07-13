@@ -33,6 +33,7 @@ def get_latest_bitcoin_price(currency, source):
                 return int(response_json["bpi"]["EUR"]["rate_float"])
         except:
             log("Error: Coindesk API failed!")
+            return False
 
     ## Price source Bitmex
     if source == "bitmex":
@@ -42,6 +43,7 @@ def get_latest_bitcoin_price(currency, source):
             return int(response_json[0]["price"])
         except:
             log("Error: Bitmex price API failed!")
+            return False
 
 ##################
 ## Bot methods  ##
