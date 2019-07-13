@@ -440,82 +440,86 @@ while True:
 
         if bitmex_active:
             if user["bitmex_client"]:
-                ## Get position size
-                bitmex_position_amount_new = int(get_bitmex_position(user["bitmex_client"], "currentQty"))
-                bitmex_position_amount = int(user["bitmex_position_amount"])
 
-                ## Calculate the difference
-                bitmex_position_amount_change = abs(bitmex_position_amount_new - bitmex_position_amount)
+                bitmex_position_amount_new = get_bitmex_position(user["bitmex_client"], "currentQty")
 
-                ## Check if position was closed or just changed
-                if bitmex_position_amount_new == 0 and bitmex_position_amount != 0:
-                    ## Position was closed - check if long or short
-                    if bitmex_position_amount > 0:
-                        ## Announce closure of long position
-                        message = "Closed long position @ " + str(new_price) + "\nPNL: " + str(get_bitmex_position(user["bitmex_client"], "prevRealisedPnl"))
-                        log(message)
-                        messages.append(message)
-                        messages_report_chan.append(message)
-                    elif bitmex_position_amount < 0:
-                        ## Announce closure of short position
-                        message = "Closed short position @ " + str(new_price) + "\nPNL: " + str(get_bitmex_position(user["bitmex_client"], "prevRealisedPnl"))
-                        log(message)
-                        messages.append(message)
-                        messages_report_chan.append(message)
+                if bitmex_position_amount_new != "No open position!":
+                    ## Get position size
+                    bitmex_position_amount_new = int(bitmex_position_amount_new)
+                    bitmex_position_amount = int(user["bitmex_position_amount"])
 
-                ## Increased and reduced is based on long or short
-                ## If position is a long
-                elif bitmex_position_amount_new > 0:
-                    ## Announce if position was reduced
-                    if bitmex_position_amount_new < bitmex_position_amount:
-                        message = "Reduced long position by " + str(bitmex_position_amount_change) + " @ " + str(new_price)
-                        log(message)
-                        messages.append(message)
-                        messages_report_chan.append(message)
-                        ## Announce new position and PNL
-                        message = bitmex_open_position
-                        log(message)
-                        messages.append(message)
-                        messages_report_chan.append(message)
-                    ## Announce if position was increased
-                    elif bitmex_position_amount_new > bitmex_position_amount:
-                        message = "Increased long position by " + str(bitmex_position_amount_change) + " @ " + str(new_price)
-                        log(message)
-                        messages.append(message)
-                        messages_report_chan.append(message)
-                        ## Announce new position and PNL
-                        message = bitmex_open_position
-                        log(message)
-                        messages.append(message)
-                        messages_report_chan.append(message)
+                    ## Calculate the difference
+                    bitmex_position_amount_change = abs(bitmex_position_amount_new - bitmex_position_amount)
 
-                ## Position is a short
-                else:
-                    ## Announce if position was reduced
-                    if bitmex_position_amount_new > bitmex_position_amount:
-                        message = "Reduced short position by " + str(bitmex_position_amount_change) + " @ " + str(new_price)
-                        log(message)
-                        messages.append(message)
-                        messages_report_chan.append(message)
-                        ## Announce new position and PNL
-                        message = bitmex_open_position
-                        log(message)
-                        messages.append(message)
-                        messages_report_chan.append(message)
-                    ## Announce if position was increased
-                    elif bitmex_position_amount_new < bitmex_position_amount:
-                        message = "Increased short position by " + str(bitmex_position_amount_change) + " @ " + str(new_price)
-                        log(message)
-                        messages.append(message)
-                        messages_report_chan.append(message)
-                        ## Announce new position and PNL
-                        message = bitmex_open_position
-                        log(message)
-                        messages.append(message)
-                        messages_report_chan.append(message)
+                    ## Check if position was closed or just changed
+                    if bitmex_position_amount_new == 0 and bitmex_position_amount != 0:
+                        ## Position was closed - check if long or short
+                        if bitmex_position_amount > 0:
+                            ## Announce closure of long position
+                            message = "Closed long position @ " + str(new_price) + "\nPNL: " + str(get_bitmex_position(user["bitmex_client"], "prevRealisedPnl"))
+                            log(message)
+                            messages.append(message)
+                            messages_report_chan.append(message)
+                        elif bitmex_position_amount < 0:
+                            ## Announce closure of short position
+                            message = "Closed short position @ " + str(new_price) + "\nPNL: " + str(get_bitmex_position(user["bitmex_client"], "prevRealisedPnl"))
+                            log(message)
+                            messages.append(message)
+                            messages_report_chan.append(message)
 
-                ## Set new Bitmex position amount
-                user["bitmex_position_amount"] = bitmex_position_amount_new
+                    ## Increased and reduced is based on long or short
+                    ## If position is a long
+                    elif bitmex_position_amount_new > 0:
+                        ## Announce if position was reduced
+                        if bitmex_position_amount_new < bitmex_position_amount:
+                            message = "Reduced long position by " + str(bitmex_position_amount_change) + " @ " + str(new_price)
+                            log(message)
+                            messages.append(message)
+                            messages_report_chan.append(message)
+                            ## Announce new position and PNL
+                            message = bitmex_open_position
+                            log(message)
+                            messages.append(message)
+                            messages_report_chan.append(message)
+                        ## Announce if position was increased
+                        elif bitmex_position_amount_new > bitmex_position_amount:
+                            message = "Increased long position by " + str(bitmex_position_amount_change) + " @ " + str(new_price)
+                            log(message)
+                            messages.append(message)
+                            messages_report_chan.append(message)
+                            ## Announce new position and PNL
+                            message = bitmex_open_position
+                            log(message)
+                            messages.append(message)
+                            messages_report_chan.append(message)
+
+                    ## Position is a short
+                    else:
+                        ## Announce if position was reduced
+                        if bitmex_position_amount_new > bitmex_position_amount:
+                            message = "Reduced short position by " + str(bitmex_position_amount_change) + " @ " + str(new_price)
+                            log(message)
+                            messages.append(message)
+                            messages_report_chan.append(message)
+                            ## Announce new position and PNL
+                            message = bitmex_open_position
+                            log(message)
+                            messages.append(message)
+                            messages_report_chan.append(message)
+                        ## Announce if position was increased
+                        elif bitmex_position_amount_new < bitmex_position_amount:
+                            message = "Increased short position by " + str(bitmex_position_amount_change) + " @ " + str(new_price)
+                            log(message)
+                            messages.append(message)
+                            messages_report_chan.append(message)
+                            ## Announce new position and PNL
+                            message = bitmex_open_position
+                            log(message)
+                            messages.append(message)
+                            messages_report_chan.append(message)
+
+                    ## Set new Bitmex position amount
+                    user["bitmex_position_amount"] = bitmex_position_amount_new
 
                 ## Suppress message if the bot restarted
                 if bot_restarted:
