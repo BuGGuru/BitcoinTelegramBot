@@ -282,6 +282,7 @@ def cli_overview():
         os.system('clear')
         print("\n")
         print("Time: {}".format(datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+        print("Devmode: " + str(devmode))
         print("")
         print("Bitmex Price.: {}".format(price_bitmex))
         print("Deribit Price: {}".format(price_deribit))
