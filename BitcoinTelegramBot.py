@@ -12,6 +12,7 @@ import json
 import threading
 from deribit_api import RestClient
 import os
+from blockcypher import get_transaction_details
 
 ## Disable warnings
 urllib3.disable_warnings()
@@ -319,7 +320,7 @@ config.read("./config.cfg")
 bot_token = config.get("General", "bot_token")
 report_chan = config.get("General", "report_chan")
 devmode = config.getboolean("General", "devmode")
-overview_mode = config.get("General", "overview_mode")
+overview_mode = config.getboolean("General", "overview_mode")
 
 ## Get user configs
 userlist_import = config.get("General", "userlist")
@@ -487,7 +488,7 @@ while True:
         send_message(userlist[0]["user_chat_id"], message)
 
     if t3.isAlive() == False:
-        t2.start()
+        t3.start()
         message = "Thread 3 died, i restart it."
         send_message(userlist[0]["user_chat_id"], message)
 
