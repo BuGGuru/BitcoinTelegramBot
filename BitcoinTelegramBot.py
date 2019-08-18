@@ -12,7 +12,6 @@ import json
 import threading
 from deribit_api import RestClient
 import os
-from blockcypher import get_transaction_details
 
 ## Disable warnings
 urllib3.disable_warnings()
@@ -308,6 +307,22 @@ def cli_overview():
                 print(item)
         sleep(1)
 
+################
+## TX Checker ##
+################
+
+def tx_checker(tx):
+
+    response = requests.get("https://api.blockcypher.com/v1/btc/main/txs/" + tx, verify=False)
+    response_json = response.json()
+
+    try:
+        response_json["confirmed"]
+        return True
+    except KeyError:
+        ## Do Nothing
+        return False
+
 #############
 ## Configs ##
 #############
@@ -356,6 +371,7 @@ for user in userlist:
     deribit_client = False
     bitmex_position_amount = 0
     deribit_position_amount = 0
+    tx_to_check = config.get(user, "tx_to_check")
 
     if bitmex_active:
         ## Try to get a client
@@ -408,7 +424,8 @@ for user in userlist:
                 "deribit_testnet": deribit_testnet,
                 "username": username,
                 "report_active": report_active,
-                "pref_exchange": pref_exchange
+                "pref_exchange": pref_exchange,
+                "tx_to_check": tx_to_check
                 }
     userlist[user_position] = settings
     user_position = user_position + 1
@@ -466,8 +483,9 @@ t1.start()
 t2 = threading.Thread(target=get_latest_bitcoin_price, args=("deribit",))
 t2.start()
 
-t3 = threading.Thread(target=cli_overview)
-t3.start()
+if overview_mode:
+    t3 = threading.Thread(target=cli_overview)
+    t3.start()
 
 ###############
 ## Main loop ##
@@ -487,10 +505,11 @@ while True:
         message = "Thread 2 died, i restart it."
         send_message(userlist[0]["user_chat_id"], message)
 
-    if t3.isAlive() == False:
-        t3.start()
-        message = "Thread 3 died, i restart it."
-        send_message(userlist[0]["user_chat_id"], message)
+    if overview_mode:
+        if t3.isAlive() == False:
+            t3.start()
+            message = "Thread 3 died, i restart it."
+            send_message(userlist[0]["user_chat_id"], message)
 
     #############
     #### BOT ####
@@ -510,6 +529,7 @@ while True:
         username = user["username"]
         report_active = user["report_active"]
         pref_exchange = user["pref_exchange"]
+        tx_to_check = user["tx_to_check"]
 
         if pref_exchange == "deribit":
             new_price = price_deribit
@@ -859,6 +879,23 @@ while True:
                 send_message(report_chan, all_messages)
                 messages_report_chan = []
 
+        ################
+        ## TX Tracker ##
+        ################
+
+        if tx_to_check != "False" and interval_count % 10 == 0:
+            print("ill check txid")
+            if tx_checker(tx_to_check):
+                message = "Your TX is confirmed!"
+                log(message)
+                messages.append(message)
+                config.set(str(user["user_chat_id"]), 'tx_to_check', False)
+                write_config = True
+                user["tx_to_check"] = "False"
+                with open('config.cfg', 'w') as configfile:
+                    config.write(configfile)
+                    configfile.close()
+
     #####################
     ## Chat monitoring ##
     #####################
@@ -966,6 +1003,7 @@ while True:
                         deribit_testnet = userlist[find_user_index]["deribit_testnet"]
                         ask_deribit_key = userlist[find_user_index]["ask_deribit_key"]
                         ask_deribit_secret = userlist[find_user_index]["ask_deribit_secret"]
+                        tx_to_check = userlist[find_user_index]["tx_to_check"]
 
                         ## Update the message counter
                         message_counter = message_counter + 1
@@ -1431,6 +1469,23 @@ while True:
                                 message_report = str(username) + " activated reporting!"
                                 log(message_report)
                                 send_message(report_chan, message_report)
+
+                        ## Listen for tx IDs
+                        if len(splitted[0]) == 64:
+                            tx_to_check = splitted[0]
+                            tx_confirmed = tx_checker(tx_to_check)
+                            if tx_confirmed:
+                                message = "Your TX is confirmed!"
+                                log(message)
+                                messages.append(message)
+                            else:
+                                message = "Your TX is not confirmed yet. I will let you know when it is."
+                                log(message)
+                                messages.append(message)
+                                ## Watch TX
+                                config.set(str(check_user), 'tx_to_check', tx_to_check)
+                                write_config = True
+                                userlist[find_user_index]["tx_to_check"] = tx_to_check
 
                         #####################
                         ## End of commands ##
