@@ -318,7 +318,7 @@ config.read("./config.cfg")
 ## Get general configs
 bot_token = config.get("General", "bot_token")
 report_chan = config.get("General", "report_chan")
-devmode = config.get("General", "devmode")
+devmode = config.getboolean("General", "devmode")
 overview_mode = config.get("General", "overview_mode")
 
 ## Get user configs
