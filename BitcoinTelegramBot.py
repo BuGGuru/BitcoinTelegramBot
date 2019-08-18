@@ -9,6 +9,9 @@ import bitmex
 import urllib3
 from datetime import datetime
 import json
+import threading
+from deribit_api import RestClient
+import os
 
 ## Disable warnings
 urllib3.disable_warnings()
@@ -18,36 +21,40 @@ urllib3.disable_warnings()
 ####################
 
 ## Get the prices from an api
-def get_latest_bitcoin_price(currency, source):
-
-    ## Price source Coindesk
-    if source == "coindesk":
-        try:
-            if currency == "usd":
-                response = requests.get("https://api.coindesk.com/v1/bpi/currentprice/USD.json", verify=False)
+def get_latest_bitcoin_price(source):
+    global price_bitmex
+    global price_deribit
+    while True:
+        ## Price source Bitmex
+        if source == "bitmex":
+            try:
+                response = requests.get("https://www.bitmex.com/api/v1/trade?symbol=XBT&count=1&reverse=true", verify=False)
                 response_json = response.json()
-                return int(response_json["bpi"]["USD"]["rate_float"])
-            else:
-                response = requests.get("https://api.coindesk.com/v1/bpi/currentprice/EUR.json", verify=False)
-                response_json = response.json()
-                return int(response_json["bpi"]["EUR"]["rate_float"])
-        except:
-            log("Error: Coindesk API failed!")
-            return False
+                price_bitmex = int(response_json[0]["price"])
+                if devmode:
+                    print(bitmex_rate_limit)
+                sleep(3)
+            except:
+                price_bitmex = None
+                if devmode:
+                    print("Bitmex went shit")
+                sleep(3)
 
-    ## Price source Bitmex
-    if source == "bitmex":
-        try:
-            response = requests.get("https://www.bitmex.com/api/v1/trade?symbol=XBT&count=1&reverse=true", verify=False)
-            response_json = response.json()
-            return int(response_json[0]["price"])
-        except:
-            log("Error: Bitmex price API failed!")
-            return False
+        ## Price source Deribit
+        if source == "deribit":
+            try:
+                price_deribit_api = deribit_client_price.getlasttrades("BTC-PERPETUAL", 1)
+                price_deribit = int(price_deribit_api[0]["price"])
+                sleep(3)
+            except:
+                price_deribit = None
+                if devmode:
+                    print("Deribit went shit")
+                sleep(3)
 
-##################
-## Bot methods  ##
-##################
+#######################
+## Telegram methods  ##
+#######################
 
 ## Get updates from bot
 def get_messages(offset_func):
@@ -68,9 +75,10 @@ def send_message(chat, message_func):
         log("Error: Could not set message!")
         return False
 
-####################
-## Bitmex methods ##
-####################
+######################
+## Exchange methods ##
+######################
+
 ## Get user Bitmex client running
 def get_bitmex_client(testnet, key, secret):
     # noinspection PyBroadException
@@ -78,12 +86,28 @@ def get_bitmex_client(testnet, key, secret):
         bitmex_client_func = bitmex.bitmex(test=testnet, api_key=key, api_secret=secret)
         ## Use this to validate the bitmex client
         get_bitmex_position(bitmex_client_func, "currentQty")
-        ## If we got a valid bitmex client
+        ## If we got a valid bitmex client return it
         return bitmex_client_func
     except:
         return False
 
-## Get open position
+## Get user Deribit client running
+def get_deribit_client(testnet, key, secret):
+    # noinspection PyBroadException
+    if testnet:
+        url = "https://test.deribit.com"
+    else:
+        url = "https://deribit.com"
+    try:
+        deribit_client_func = RestClient(key, secret, url)
+        ## Use this to validate the bitmex client
+        get_deribit_position(deribit_client_func, "currentQty")
+        ## If we got a valid bitmex client return it
+        return deribit_client_func
+    except:
+        return False
+
+## Get open bitmex position
 def get_bitmex_position(bitmex_client_func, askedValue):
     try:
         ## Get data from Bitmex - filtered for XBT positions
@@ -129,7 +153,7 @@ def get_bitmex_position(bitmex_client_func, askedValue):
             openPosition = long_short + " position: " + str(currentQty) + " | Open PNL: " + str(unrealisedPnl)[:8] + "\nFull PNL: " + str(fullPnl)[:8] + " | Break even: " + str(breakEvenPrice) + " (" + str(diff_break_even) + ")"
             return openPosition
         elif askedValue == "openPosition":
-            openPosition = "No open position at the moment.\nLast position PNL: " + str(prevRealisedPnl)
+            openPosition = "No open Bitmex position at the moment.\nLast position PNL: " + str(prevRealisedPnl)
             return openPosition
 
         ## Return the position size
@@ -142,8 +166,8 @@ def get_bitmex_position(bitmex_client_func, askedValue):
         if askedValue == "prevRealisedPnl":
             return prevRealisedPnl
 
-    except IndexError or AttributeError:
-        return "No open position!"
+    except:
+        return "No open Bitmex position!"
 
 ## Get user balance
 def get_bitmex_balance(bitmex_client_func, askedValue):
@@ -171,19 +195,116 @@ def get_bitmex_balance(bitmex_client_func, askedValue):
     except IndexError or AttributeError:
         return "No data received!"
 
+## Get open Deribit position
+def get_deribit_position(deribit_client, askedValue):
+    try:
+        ## Get data from Deribit
+        result = deribit_client.positions()
+        try:
+            ## Parse first position found
+            result_json = result[0]
+            ## Unrealised PNL
+            unrealisedPnl = result_json["profitLoss"]
+            unrealisedPnl = round(unrealisedPnl, 6)
+            ## realised PNL
+            realisedPnl = result_json["realizedPl"]
+            realisedPnl = round(realisedPnl, 6)
+            ## rebalanced PNL
+            fullPnl = result_json["floatingPl"]
+            fullPnl = round(fullPnl, 6)
+            ## Break even price
+            breakEvenPrice = int(result_json["averagePrice"])
+            ## Last price
+            lastPrice = int(result_json["markPrice"])
+            ## Calculate the difference to break even
+            diff_break_even = abs(breakEvenPrice - lastPrice)
+            ## Position size
+            currentQty = int(result_json["amount"])
+            ## Last closed position
+            prevRealisedPnl = "Work in progress for Deribit"
+        except IndexError or AttributeError:
+            currentQty = 0
+
+        ## Long or Short
+        long_short = "No Position!"
+        if currentQty > 0:
+            long_short = "Long"
+        if currentQty < 0:
+            long_short = "Short"
+        ## Return the open position and stats
+        if askedValue == "openPosition" and currentQty != 0:
+            openPosition = long_short + " position: " + str(currentQty) + " | Open PNL: " + str(unrealisedPnl)[:8] + "\nFull PNL: " + str(fullPnl)[:8] + " | Entry: " + str(breakEvenPrice) + " (" + str(diff_break_even) + ")"
+            return openPosition
+        elif askedValue == "openPosition":
+            openPosition = "No open Deribit position at the moment."
+            return openPosition
+        ## Return the position size
+        if askedValue == "currentQty":
+            return currentQty
+        ## Return the unrealisedPnl
+        if askedValue == "unrealisedPnl":
+            return unrealisedPnl
+
+    except IndexError or AttributeError:
+        return "No open Deribit position!"
+
 
 ## Log to console
 def log(output):
 
     global last_log
 
-    ## Print new Timestamp in log if last log is older than 5 seconds
-    if time.time() - last_log > 5:
-        print("\n-------------------\n" + datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\n-------------------\n" + str(output))
-        last_log = time.time()
+    if overview_mode:
+        ## Put Logs in a List so we can display it later in the overview
+        if time.time() - last_log > 5:
+            output = "\n-------------------\n" + datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\n-------------------\n" + str(output)
+            logs.append(output)
+            last_log = time.time()
+        else:
+            logs.append(output)
+            last_log = time.time()
     else:
-        print(str(output))
-        last_log = time.time()
+        ## Print new Timestamp in log if last log is older than 5 seconds
+        if time.time() - last_log > 5:
+            print("\n-------------------\n" + datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "\n-------------------\n" + str(output))
+            last_log = time.time()
+        else:
+            print(str(output))
+            last_log = time.time()
+
+#########################
+## Overview CLI Output ##
+#########################
+
+def cli_overview():
+    # If not in dev mode we can output a overview to the cli
+    while True:
+        os.system('clear')
+        print("\n")
+        print("Time: {}".format(datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+        print("")
+        print("Bitmex Price.: {}".format(price_bitmex))
+        print("Deribit Price: {}".format(price_deribit))
+        print("")
+        print("Last Action: {}".format(datetime.fromtimestamp(int(last_log))))
+        print("")
+        print("Last five logs: ({})".format(len(logs)))
+        print("--------------------")
+
+        ## We only want the last 5 log segments
+        log_count = 0
+        log_position = len(logs)
+        if len(logs) > 0:
+            logrotate = []
+            while log_count < 5 and log_position > 0:
+                logitem = logs[log_position-1]
+                logrotate.insert(0, logitem)
+                log_position = log_position - 1
+                if str.find(logitem, "-------------------") != -1:
+                    log_count = log_count + 1
+            for item in logrotate:
+                print(item)
+        sleep(1)
 
 #############
 ## Configs ##
@@ -197,6 +318,7 @@ config.read("./config.cfg")
 bot_token = config.get("General", "bot_token")
 report_chan = config.get("General", "report_chan")
 devmode = config.get("General", "devmode")
+overview_mode = config.get("General", "overview_mode")
 
 ## Get user configs
 userlist_import = config.get("General", "userlist")
@@ -217,12 +339,22 @@ for user in userlist:
     bitmex_secret = config.get(user, "bitmex_secret")
     bitmex_testnet = config.getboolean(user, "bitmex_testnet")
     announced_price = int(config.get(user, "announced_price"))
+    deribit_active = config.getboolean(user, "deribit_active")
+    deribit_key = config.get(user, "deribit_api_key")
+    deribit_secret = config.get(user, "deribit_secret")
+    deribit_testnet = config.getboolean(user, "deribit_testnet")
+    pref_exchange = config.get(user, "pref_exchange")
     history = []
     ask_price_steps = False
     ask_bitmex_key = False
     ask_bitmex_secret = False
+    ask_deribit_key = False
+    ask_deribit_secret = False
     bitmex_client = False
+    deribit_client = False
     bitmex_position_amount = 0
+    deribit_position_amount = 0
+
     if bitmex_active:
         ## Try to get a client
         bitmex_client = get_bitmex_client(bitmex_testnet, bitmex_key, bitmex_secret)
@@ -235,7 +367,20 @@ for user in userlist:
             ## Client is not valid - deactivate Bitmex
             bitmex_active = False
 
-    settings = {"user_position": user_position,
+    if deribit_active:
+        ## Try to get a client
+        deribit_client = get_deribit_client(deribit_testnet, deribit_key, deribit_secret)
+        ## Check if valid client received
+        if deribit_client:
+            # noinspection PyTypeChecker
+            ## Got valid client - check position amount
+            deribit_position_amount = get_deribit_position(deribit_client, "currentQty")
+        else:
+            ## Client is not valid - deactivate Bitmex
+            deribit_active = False
+
+    settings = {
+                "user_position": user_position,
                 "user_chat_id": user_chat_id,
                 "history_length": history_length,
                 "divider": divider,
@@ -243,18 +388,26 @@ for user in userlist:
                 "bitmex_active": bitmex_active,
                 "bitmex_key": bitmex_key,
                 "bitmex_secret": bitmex_secret,
+                "deribit_active": deribit_active,
+                "deribit_key": deribit_key,
+                "deribit_secret": deribit_secret,
                 "history": history,
                 "announced_price": announced_price,
                 "bitmex_client": bitmex_client,
                 "bitmex_position_amount": bitmex_position_amount,
+                "deribit_client": deribit_client,
+                "deribit_position_amount": deribit_position_amount,
                 "ask_price_steps": ask_price_steps,
                 "ask_bitmex_key": ask_bitmex_key,
                 "ask_bitmex_secret": ask_bitmex_secret,
+                "ask_deribit_key": ask_deribit_key,
+                "ask_deribit_secret": ask_deribit_secret,
                 "bitmex_testnet": bitmex_testnet,
+                "deribit_testnet": deribit_testnet,
                 "username": username,
-                "report_active": report_active
+                "report_active": report_active,
+                "pref_exchange": pref_exchange
                 }
-
     userlist[user_position] = settings
     user_position = user_position + 1
 
@@ -274,6 +427,9 @@ log_pricemoves = False
 price_error_count = 0
 bitmex_rate_limit = 300
 last_log = 0
+price_bitmex = None
+price_deribit = None
+logs = []
 
 ##################
 ## Pre-warm Bot ##
@@ -295,44 +451,44 @@ if bot_restarted and not devmode:
     log("Reported to Admin: " + str(userlist[0]["user_chat_id"]))
     send_message(userlist[0]["user_chat_id"], message)
 
+## Get Deribit Api connector running for price fetches
+## This is testnet trade read only API set
+deribit_client_price = RestClient("Ml5lhKLH", "JqJOj5tKMBFIxOYE838jeBQA2nln-P-pB2OUrQoqyqU")
+
+#############
+## Threads ##
+#############
+t1 = threading.Thread(target=get_latest_bitcoin_price, args=("bitmex",))
+t1.start()
+
+t2 = threading.Thread(target=get_latest_bitcoin_price, args=("deribit",))
+t2.start()
+
+t3 = threading.Thread(target=cli_overview)
+t3.start()
+
 ###############
 ## Main loop ##
 ###############
 
 while True:
-    ## Get new price from api
-    new_price = get_latest_bitcoin_price("usd", price_source)
+    ## Check status of the threads
+    ## Restart and inform admin if needed
 
-    ## If the API did not return a price - ask for help
-    if not new_price:
-        price_error_count = price_error_count + 1
-        log("Price error!")
-        if price_error_count > 10:
-            message = "Error: Got no new price! Help!"
-            ## Send message to the admin user (first user)
-            log("Reported to Admin: " + str(userlist[0]["user_chat_id"]))
-            send_message(userlist[0]["user_chat_id"], message)
-            price_error_count = 0
-        sleep(10)
-        continue
+    if t1.isAlive() == False:
+        t1.start()
+        message = "Thread 1 died, i restart it."
+        send_message(userlist[0]["user_chat_id"], message)
 
-    ## Reset error count since we got a new price
-    price_error_count = 0
+    if t2.isAlive() == False:
+        t2.start()
+        message = "Thread 2 died, i restart it."
+        send_message(userlist[0]["user_chat_id"], message)
 
-    ## Print price changes to console
-    if log_pricemoves:
-        if new_price < previous_price:
-            price_change_amount = new_price - previous_price
-            previous_price = new_price
-            message = ("Price change: New price is", new_price, "USD and changed", price_change_amount, "USD", "-- DOWN")
-            log(message)
-        elif new_price > previous_price:
-            price_change_amount = new_price - previous_price
-            previous_price = new_price
-            message = ("Price change: New price is", new_price, "USD and changed", price_change_amount, "USD", "-- UP")
-            log(message)
-        else:
-            price_change_amount = 0
+    if t3.isAlive() == False:
+        t2.start()
+        message = "Thread 3 died, i restart it."
+        send_message(userlist[0]["user_chat_id"], message)
 
     #############
     #### BOT ####
@@ -346,10 +502,21 @@ while True:
         divider = user["divider"]
         history = user["history"]
         bitmex_active = user["bitmex_active"]
+        deribit_active = user["deribit_active"]
         interval_check = user["interval_check"]
         announced_price = user["announced_price"]
         username = user["username"]
         report_active = user["report_active"]
+        pref_exchange = user["pref_exchange"]
+
+        if pref_exchange == "deribit":
+            new_price = price_deribit
+            if not new_price:
+                continue
+        else:
+            new_price = price_bitmex
+            if not new_price:
+                continue
 
         ## Check if the user has an open Bitmex position
         if bitmex_active:
@@ -358,23 +525,30 @@ while True:
                 bitmex_open_position = get_bitmex_position(user["bitmex_client"], "openPosition")
             else:
                 bitmex_active = False
-
+        ## Check if the user has an open Deribit position
+        if deribit_active:
+            ## Try to get Deribit client
+            if user["deribit_client"]:
+                deribit_open_position = get_deribit_position(user["deribit_client"], "openPosition")
+            else:
+                deribit_active = False
         ## Get new price level for the user
         new_price_level = int(new_price / divider)
         ## Do nothing if no new price level
         if price_level != new_price_level:
-            ## Price has to move more then 25% of the divider to avoid spam
-            if (new_price < (announced_price - (divider / 4))) or (new_price > (announced_price + (divider / 4))):
+            ## Price has to move more then xx% of the divider to avoid spam
+            if (new_price < (announced_price - (divider / 6))) or (new_price > (announced_price + (divider / 6))):
                 ## Check if new price level is not in history
                 if new_price_level not in history:
                     ## Check if price is higher or lower
                     if announced_price > new_price:
                         priceIs = "Lower"
+                        message = priceIs + " price level: " + str(new_price_level * divider + divider) + " - " + str(new_price_level * divider)
                     else:
                         priceIs = "Higher"
+                        message = priceIs + " price level: " + str(new_price_level * divider) + " - " + str(new_price_level * divider + divider)
 
                     ## Announce since price not in history
-                    message = priceIs + " price level: " + str(new_price_level * divider) + " - " + str(new_price_level * divider + divider)
                     log(message)
                     messages.append(message)
                     ## Update the users announced_price
@@ -389,23 +563,41 @@ while True:
                         log(message)
                         messages.append(message)
 
+                    ## Announce open position if Deribit is active
+                    if deribit_active:
+                        # noinspection PyUnboundLocalVariable
+                        message = str(deribit_open_position)
+                        log(message)
+                        messages.append(message)
+
                 ## Check if price is stable
                 elif (sum(history)/len(history)) == new_price_level:
 
                     ## Check if price is higher or lower
                     if announced_price > new_price:
                         priceIs = "Lower"
+                        message = priceIs + " price level: " + str(new_price_level * divider + divider) + " - " + str(new_price_level * divider)
                     else:
                         priceIs = "Higher"
+                        message = priceIs + " price level: " + str(new_price_level * divider) + " - " + str(new_price_level * divider + divider)
 
                     ## Announce since price is stable
-                    message = priceIs + " price level: " + str(new_price_level * divider) + " - " + str(new_price_level * divider + divider)
+                    log(message)
+                    messages.append(message)
+
+                    message = str(get_deribit_position(deribit_client, "openPosition"))
                     log(message)
                     messages.append(message)
 
                     ## Announce open position if Bitmex is active
                     if bitmex_active:
                         message = str(bitmex_open_position)
+                        log(message)
+                        messages.append(message)
+
+                    ## Announce open position if Deribit is active
+                    if deribit_active:
+                        message = str(deribit_open_position)
                         log(message)
                         messages.append(message)
 
@@ -443,7 +635,7 @@ while True:
 
                 bitmex_position_amount_new = get_bitmex_position(user["bitmex_client"], "currentQty")
 
-                if bitmex_position_amount_new != "No open position!":
+                if bitmex_position_amount_new != "No open Bitmex position!":
                     ## Get position size
                     bitmex_position_amount_new = int(bitmex_position_amount_new)
                     bitmex_position_amount = int(user["bitmex_position_amount"])
@@ -533,7 +725,7 @@ while True:
 
         ## If there are messages, sent them to the user
         if messages:
-            log("Sending messages to the chat: " + str(user["user_chat_id"]))
+            log("Sending messages to the chat: " + str(user["username"]))
             all_messages = ""
             for x in messages:
                 all_messages = all_messages + "\n" + x
@@ -545,7 +737,120 @@ while True:
             if report_active:
                 report_user = "User: " + str(username)
                 messages_report_chan.insert(0, report_user)
-                log("Sending messages to the report channel for user: " + str(user["user_chat_id"]))
+                log("Sending messages to the report channel for user: " + str(user["username"]))
+                all_messages = ""
+                for x in messages_report_chan:
+                    all_messages = all_messages + "\n" + x
+                send_message(report_chan, all_messages)
+                messages_report_chan = []
+
+        ##############################
+        ## Deribit position tracker ##
+        ##############################
+        if deribit_active:
+            if user["deribit_client"]:
+                deribit_position_amount_new = get_deribit_position(user["deribit_client"], "currentQty")
+                if deribit_position_amount_new != "No open Deribit position!":
+                    ## Get position size
+                    deribit_position_amount_new = int(deribit_position_amount_new)
+                    deribit_position_amount = int(user["deribit_position_amount"])
+                    ## Calculate the difference
+                    deribit_position_amount_change = abs(deribit_position_amount_new - deribit_position_amount)
+                    ## Check if position was closed or just changed
+                    if deribit_position_amount_new == 0 and deribit_position_amount != 0:
+                        ## Position was closed - check if long or short
+                        if deribit_position_amount > 0:
+                            ## Announce closure of long position
+                            message = "Closed long position @ " + str(new_price) + "\nPNL: " + str(get_deribit_position(user["deribit_client"], "prevRealisedPnl"))
+                            log(message)
+                            messages.append(message)
+                            messages_report_chan.append(message)
+                        elif deribit_position_amount < 0:
+                            ## Announce closure of short position
+                            message = "Closed short position @ " + str(new_price) + "\nPNL: " + str(get_deribit_position(user["deribit_client"], "prevRealisedPnl"))
+                            log(message)
+                            messages.append(message)
+                            messages_report_chan.append(message)
+
+                    ## Increased and reduced is based on long or short
+                    ## If position is a long
+                    elif deribit_position_amount_new > 0:
+                        ## Announce if position was reduced
+                        if deribit_position_amount_new < deribit_position_amount:
+                            message = "Reduced long position by " + str(deribit_position_amount_change) + " @ " + str(new_price)
+                            log(message)
+                            messages.append(message)
+                            messages_report_chan.append(message)
+                            ## Announce new position and PNL
+                            message = deribit_open_position
+                            log(message)
+                            messages.append(message)
+                            messages_report_chan.append(message)
+                        ## Announce if position was increased
+                        elif deribit_position_amount_new > deribit_position_amount:
+                            message = "Increased long position by " + str(deribit_position_amount_change) + " @ " + str(new_price)
+                            log(message)
+                            messages.append(message)
+                            messages_report_chan.append(message)
+                            ## Announce new position and PNL
+                            message = deribit_open_position
+                            log(message)
+                            messages.append(message)
+                            messages_report_chan.append(message)
+
+                    ## Position is a short
+                    else:
+                        ## Announce if position was reduced
+                        if deribit_position_amount_new > deribit_position_amount:
+                            message = "Reduced short position by " + str(deribit_position_amount_change) + " @ " + str(new_price)
+                            log(message)
+                            messages.append(message)
+                            messages_report_chan.append(message)
+                            ## Announce new position and PNL
+                            message = deribit_open_position
+                            log(message)
+                            messages.append(message)
+                            messages_report_chan.append(message)
+                        ## Announce if position was increased
+                        elif deribit_position_amount_new < deribit_position_amount:
+                            message = "Increased short position by " + str(deribit_position_amount_change) + " @ " + str(new_price)
+                            log(message)
+                            messages.append(message)
+                            messages_report_chan.append(message)
+                            ## Announce new position and PNL
+                            message = deribit_open_position
+                            log(message)
+                            messages.append(message)
+                            messages_report_chan.append(message)
+
+                    ## Set new deribit position amount
+                    user["deribit_position_amount"] = deribit_position_amount_new
+
+                ## Suppress message if the bot restarted
+                if bot_restarted:
+                    messages = []
+
+        ## Write config to file if necessary
+        if write_config:
+            with open('config.cfg', 'w') as configfile:
+                config.write(configfile)
+                configfile.close()
+
+        ## If there are messages, sent them to the user
+        if messages:
+            log("Sending messages to the chat: " + str(user["username"]))
+            all_messages = ""
+            for x in messages:
+                all_messages = all_messages + "\n" + x
+            send_message(user["user_chat_id"], all_messages)
+            messages = []
+
+        ## If there are messages, sent them to the report channel
+        if messages_report_chan and report_chan:
+            if report_active:
+                report_user = "User: " + str(username)
+                messages_report_chan.insert(0, report_user)
+                log("Sending messages to the report channel for user: " + str(user["username"]))
                 all_messages = ""
                 for x in messages_report_chan:
                     all_messages = all_messages + "\n" + x
@@ -556,8 +861,7 @@ while True:
     ## Chat monitoring ##
     #####################
 
-    ## Let the bot monitor for at least 65 Sec.
-    ## To avoid api limitations
+    ## Monitor loop
     mon_loop = 0
     while mon_loop < 1:
         ## Get updates from bot
@@ -570,7 +874,6 @@ while True:
 
         ## Check messages if exists
         if message_amount != 0:
-
             ## Suppress old actions if bot restarted
             if bot_restarted:
                 bot_restarted = False
@@ -650,11 +953,17 @@ while True:
                         bitmex_secret = userlist[find_user_index]["bitmex_secret"]
                         bitmex_active = userlist[find_user_index]["bitmex_active"]
                         bitmex_testnet = userlist[find_user_index]["bitmex_testnet"]
-                        ask_price_steps = userlist[find_user_index]["ask_price_steps"]
                         ask_bitmex_key = userlist[find_user_index]["ask_bitmex_key"]
                         ask_bitmex_secret = userlist[find_user_index]["ask_bitmex_secret"]
+                        ask_price_steps = userlist[find_user_index]["ask_price_steps"]
                         username = userlist[find_user_index]["username"]
                         report_active = userlist[find_user_index]["report_active"]
+                        deribit_key = userlist[find_user_index]["deribit_key"]
+                        deribit_secret = userlist[find_user_index]["deribit_secret"]
+                        deribit_active = userlist[find_user_index]["deribit_active"]
+                        deribit_testnet = userlist[find_user_index]["deribit_testnet"]
+                        ask_deribit_key = userlist[find_user_index]["ask_deribit_key"]
+                        ask_deribit_secret = userlist[find_user_index]["ask_deribit_secret"]
 
                         ## Update the message counter
                         message_counter = message_counter + 1
@@ -674,8 +983,30 @@ while True:
                             log(message)
                             messages.append(message)
 
-                        ## Tell the user his open bitmex position
-                        if splitted[0] == "/show_position":
+                        ## Set Bitmex as prefered exchange
+                        if splitted[0] == "/set_prefered_exchange_to_bitmex":
+                            pref_exchange = "bitmex"
+                            config.set(str(check_user), 'pref_exchange', pref_exchange)
+                            write_config = True
+                            userlist[find_user_index]["pref_exchange"] = pref_exchange
+                            ## Tell the user that Bitmex is now the prefered exchange
+                            message = "The prefered exchange is now Bitmex (price source)"
+                            log(message)
+                            messages.append(message)
+
+                        ## Set Deribit as prefered exchange
+                        if splitted[0] == "/set_prefered_exchange_to_deribit":
+                            pref_exchange = "deribit"
+                            config.set(str(check_user), 'pref_exchange', pref_exchange)
+                            write_config = True
+                            userlist[find_user_index]["pref_exchange"] = pref_exchange
+                            ## Tell the user that Deribit is now the prefered exchange
+                            message = "The prefered exchange is now Deribit (price source)"
+                            log(message)
+                            messages.append(message)
+
+                        ## Tell the user his open Bitmex position
+                        if splitted[0] == "/show_bitmex_position":
                             if bitmex_key and bitmex_secret:
                                 bitmex_client = get_bitmex_client(bitmex_testnet, bitmex_key, bitmex_secret)
                                 if bitmex_client:
@@ -689,6 +1020,24 @@ while True:
                                     messages.append(message)
                             else:
                                 message = "You need to set your API Key and Secret:\n/set_bitmex_key\n/set_bitmex_secret"
+                                log(message)
+                                messages.append(message)
+
+                        ## Tell the user his open Deribit position
+                        if splitted[0] == "/show_deribit_position":
+                            if deribit_key and deribit_secret:
+                                deribit_client = get_deribit_client(deribit_testnet, deribit_key, deribit_secret)
+                                if deribit_client:
+                                    # noinspection PyTypeChecker
+                                    message = get_deribit_position(deribit_client, "openPosition")
+                                    log(message)
+                                    messages.append(message)
+                                else:
+                                    message = "Something went wrong. Ask the Admin!"
+                                    log(message)
+                                    messages.append(message)
+                            else:
+                                message = "You need to set your API Key and Secret:\n/set_deribit_key\n/set_deribit_secret"
                                 log(message)
                                 messages.append(message)
 
@@ -802,7 +1151,7 @@ while True:
                                     config.set(str(check_user), 'bitmex_api_key', bitmex_key)
                                     write_config = True
                                     userlist[find_user_index]["bitmex_key"] = bitmex_key
-                                    message = "Okay, i saved your Bitmex key. Make sure to set also the secret\n/set_bitmex_secret.\n\nIf you set both you can use:\n/toggle_bitmex\n/show_position"
+                                    message = "Okay, i saved your Bitmex key. Make sure to set also the secret\n/set_bitmex_secret.\n\nIf you set both you can use:\n/toggle_bitmex\n/show_bitmex_position"
                                     log(message)
                                     messages.append(message)
                                     mon_loop = 50
@@ -825,7 +1174,7 @@ while True:
                                 ask_bitmex_key = False
                                 userlist[find_user_index]["ask_bitmex_key"] = False
                                 userlist[find_user_index]["bitmex_key"] = bitmex_key
-                                message = "Okay, i saved your Bitmex key. Make sure you also set the secret\n/set_bitmex_secret.\n\nIf you set both you can use:\n/toggle_bitmex\n/show_position"
+                                message = "Okay, i saved your Bitmex key. Make sure you also set the secret\n/set_bitmex_secret.\n\nIf you set both you can use:\n/toggle_bitmex\n/show_bitmex_position"
                                 log(message)
                                 messages.append(message)
                                 mon_loop = 50
@@ -847,7 +1196,7 @@ while True:
                                     config.set(str(check_user), 'bitmex_secret', bitmex_secret)
                                     write_config = True
                                     userlist[find_user_index]["bitmex_secret"] = bitmex_secret
-                                    message = "Okay, i saved your Bitmex secret. Make sure to set also the key\n/set_bitmex_key.\n\nIf you set both you can use:\n/toggle_bitmex\n/show_position"
+                                    message = "Okay, i saved your Bitmex secret. Make sure to set also the key\n/set_bitmex_key.\n\nIf you set both you can use:\n/toggle_bitmex\n/show_bitmex_position"
                                     log(message)
                                     messages.append(message)
                                     mon_loop = 50
@@ -870,7 +1219,7 @@ while True:
                                 ask_bitmex_secret = False
                                 userlist[find_user_index]["ask_bitmex_secret"] = False
                                 userlist[find_user_index]["bitmex_secret"] = bitmex_secret
-                                message = "Okay, i saved your Bitmex secret. Make sure you also set the key\n/set_bitmex_key\n\nIf you set both you can use:\n/toggle_bitmex\n/show_position"
+                                message = "Okay, i saved your Bitmex secret. Make sure you also set the key\n/set_bitmex_key\n\nIf you set both you can use:\n/toggle_bitmex\n/show_bitmex_position"
                                 log(message)
                                 messages.append(message)
                                 mon_loop = 50
@@ -882,14 +1231,142 @@ while True:
                                 messages.append(message)
                                 log(message)
 
-                        ## Tell the user the real price
-                        if splitted[0] == "/show_real_price":
-                            message = "The BTC price is: " + str(new_price) + " USD"
+                        ## Listen for Deribit toggle command
+                        if splitted[0] == "/toggle_deribit":
+                            ## Check if the API settings are there
+                            if deribit_key and deribit_secret:
+                                ## Deactivate Deribit if it is enabled
+                                if deribit_active:
+                                    deribit_active = False
+                                    userlist[find_user_index]["deribit_active"] = False
+                                    config.set(str(check_user), "deribit_active", "False")
+                                    write_config = True
+                                    message = "Deribit disabled"
+                                    messages.append(message)
+                                ## Enable Deribit if it is disabled
+                                else:
+                                    deribit_client = get_deribit_client(deribit_testnet, deribit_key, deribit_secret)
+                                    if deribit_client:
+                                        userlist[find_user_index]["deribit_client"] = deribit_client
+                                        deribit_active = True
+                                        userlist[find_user_index]["deribit_active"] = True
+                                        config.set(str(check_user), "deribit_active", "True")
+                                        write_config = True
+                                        message = "Deribit enabled"
+                                        messages.append(message)
+                                    else:
+                                        message = "You might need to set your API key and Secret:\n/set_deribit_key\n/set_deribit_secret\nAfter that, try again!"
+                                        log(message)
+                                        messages.append(message)
+                            else:
+                                message = "You need to set your API key and Secret:\n/set_deribit_key\n/set_deribit_secret"
+                                log(message)
+                                messages.append(message)
+
+                        ## The user wants to change his Deribit API Key
+                        if splitted[0] == "/set_deribit_key":
+                            if len(splitted) > 1:
+                                ## Look for a valid value for the new price steps
+                                ## Only clue we have it has to be 24 chars long
+                                if len(splitted[1]) == 8:
+                                    deribit_key = str(splitted[1])
+                                    config.set(str(check_user), 'deribit_api_key', deribit_key)
+                                    write_config = True
+                                    userlist[find_user_index]["deribit_key"] = deribit_key
+                                    message = "Okay, i saved your Deribit key. Make sure to set also the secret\n/set_deribit_secret.\n\nIf you set both you can use:\n/toggle_deribit\n/show_deribit_position"
+                                    log(message)
+                                    messages.append(message)
+                                    mon_loop = 50
+                                else:
+                                    ## The user did not give a valid value for the Deribit key so ask him
+                                    ask_deribit_key = True
+                                    userlist[find_user_index]["ask_deribit_key"] = True
+                            else:
+                                ## The user did not give a valid value for the Deribit key so ask him
+                                ask_deribit_key = True
+                                userlist[find_user_index]["ask_deribit_key"] = True
+                        ## If the user got asked for the Deribit key, look for the answer
+                        if ask_deribit_key:
+                            ## Look for a valid value for the Deribit key
+                            ## Only clue we have it has to be 24 chars long
+                            if len(splitted[0]) == 8:
+                                deribit_key = str(splitted[0])
+                                config.set(str(check_user), 'deribit_api_key', deribit_key)
+                                write_config = True
+                                ask_deribit_key = False
+                                userlist[find_user_index]["ask_deribit_key"] = False
+                                userlist[find_user_index]["deribit_key"] = deribit_key
+                                message = "Okay, i saved your Deribit key. Make sure you also set the secret\n/set_deribit_secret.\n\nIf you set both you can use:\n/toggle_deribit\n/show_deribit_position"
+                                log(message)
+                                messages.append(message)
+                                mon_loop = 50
+                            else:
+                                ## The user did not give a valid value for the Deribit key so ask him
+                                ask_deribit_key = True
+                                userlist[find_user_index]["ask_deribit_key"] = True
+                                message = "Tell me your Deribit API key. Be sure you created a read-only API Key on Deribit."
+                                messages.append(message)
+                                log(message)
+
+                        ## The user wants to change his Deribit API secret
+                        if splitted[0] == "/set_deribit_secret":
+                            if len(splitted) > 1:
+                                ## Look for a valid value for the Deribit API secret
+                                ## Only clue we have it has to be 48 chars long
+                                if len(splitted[1]) == 43:
+                                    deribit_key = str(splitted[1])
+                                    config.set(str(check_user), 'deribit_secret', deribit_secret)
+                                    write_config = True
+                                    userlist[find_user_index]["deribit_secret"] = deribit_secret
+                                    message = "Okay, i saved your Deribit secret. Make sure to set also the key\n/set_deribit_key.\n\nIf you set both you can use:\n/toggle_deribit\n/show_deribit_position"
+                                    log(message)
+                                    messages.append(message)
+                                    mon_loop = 50
+                                else:
+                                    ## The user did not give a valid value for the Deribit secret so ask him
+                                    ask_deribit_secret = True
+                                    userlist[find_user_index]["ask_deribit_secret"] = True
+                            else:
+                                ## The user did not give a valid value for the Deribit secret so ask him
+                                ask_deribit_secret = True
+                                userlist[find_user_index]["ask_deribit_secret"] = True
+                        ## If the user got asked for the Deribit secret, look for the answer
+                        if ask_deribit_secret:
+                            ## Look for a valid value for the Deribit secret
+                            ## Only clue we have it has to be 48 chars long
+                            if len(splitted[0]) == 43:
+                                deribit_secret = str(splitted[0])
+                                config.set(str(check_user), 'deribit_secret', deribit_secret)
+                                write_config = True
+                                ask_deribit_secret = False
+                                userlist[find_user_index]["ask_deribit_secret"] = False
+                                userlist[find_user_index]["deribit_secret"] = deribit_secret
+                                message = "Okay, i saved your Deribit secret. Make sure you also set the key\n/set_deribit_key\n\nIf you set both you can use:\n/toggle_deribit\n/show_deribit_position"
+                                log(message)
+                                messages.append(message)
+                                mon_loop = 50
+                            else:
+                                ## The user did not give a valid value for the Deribit key so ask him
+                                ask_deribit_secret = True
+                                userlist[find_user_index]["ask_deribit_secret"] = True
+                                message = "Tell me your Deribit API secret. Be sure you created a read-only API key on Deribit."
+                                messages.append(message)
+                                log(message)
+
+                        ## Tell the user the Bitmex price
+                        if splitted[0] == "/show_bitmex_price":
+                            message = "The BTC price is: " + str(price_bitmex) + " USD"
                             log(message)
                             messages.append(message)
 
-                        ## Toggle Testnet
-                        if splitted[0] == "/toggle_testnet":
+                        ## Tell the user the Deribit price
+                        if splitted[0] == "/show_deribit_price":
+                            message = "The BTC price is: " + str(price_deribit) + " USD"
+                            log(message)
+                            messages.append(message)
+
+                        ## Toggle Bitmex Testnet
+                        if splitted[0] == "/toggle_bitmex_testnet":
                             if bitmex_testnet:
                                 bitmex_testnet = False
                                 userlist[find_user_index]["bitmex_testnet"] = False
@@ -904,6 +1381,25 @@ while True:
                                 config.set(str(check_user), 'bitmex_testnet', bitmex_testnet)
                                 write_config = True
                                 message = "Activated Testnet - make sure to set the right API Keys\nUse /toggle_bitmex afterwards!"
+                                log(message)
+                                messages.append(message)
+
+                        ## Toggle Deribit Testnet
+                        if splitted[0] == "/toggle_deribit_testnet":
+                            if bitmex_testnet:
+                                deribit_testnet = False
+                                userlist[find_user_index]["deribit_testnet"] = False
+                                config.set(str(check_user), 'deribit_testnet', deribit_testnet)
+                                write_config = True
+                                message = "Activated Mainnet  - make sure to set the right API Keys\nUse /toggle_deribit afterwards!"
+                                log(message)
+                                messages.append(message)
+                            else:
+                                deribit_testnet = True
+                                userlist[find_user_index]["deribit_testnet"] = True
+                                config.set(str(check_user), 'deribit_testnet', deribit_testnet)
+                                write_config = True
+                                message = "Activated Testnet - make sure to set the right API Keys\nUse /toggle_deribit afterwards!"
                                 log(message)
                                 messages.append(message)
 
