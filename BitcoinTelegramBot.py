@@ -311,17 +311,35 @@ def cli_overview():
 ## TX Checker ##
 ################
 
-def tx_checker(tx):
+def tx_checker(tx, source):
+    if source == "blockcypher":
+        try:
+            response = requests.get(
+                "https://api.blockcypher.com/v1/btc/main/txs/eaffea28e77a8ebd9134003d00583f8a87d0b2b0a1c6687e64d861bc670b634c" + tx, verify=False)
+            response_json = response.json()
+            response_json["confirmed"]
+            return "confirmed"
+        except:
+            return "unconfirmed"
 
-    response = requests.get("https://api.blockcypher.com/v1/btc/main/txs/" + tx, verify=False)
-    response_json = response.json()
+    if source == "blockchair":
+        try:
+            response = requests.get("http://api.blockchair.com/bitcoin/dashboards/transaction/" + tx + "/priority", verify=False)
+            response_json = response.json()
+            position = response_json["data"][tx]["priority"]["position"]
+            out_of = response_json["data"][tx]["priority"]["out_of"]
 
-    try:
-        response_json["confirmed"]
-        return True
-    except KeyError:
-        ## Do Nothing
-        return False
+            if not position:
+                response = requests.get("http://api.blockchair.com/bitcoin/dashboards/transaction/" + tx, verify=False)
+                response_json = response.json()
+                block = response_json["data"][tx]["transaction"]["block_id"]
+
+                if block != "-1":
+                    return "confirmed", "Your TX is confirmed in block " + str(block)
+            else:
+                return "unconfirmed", "The position of your TX is " + str(position) + " out of " + str(out_of)
+        except:
+            log("Blockchair TX lookup went shit")
 
 #############
 ## Configs ##
@@ -593,7 +611,7 @@ while True:
                         messages.append(message)
 
                 ## Check if price is stable
-                elif (sum(history)/len(history)) == new_price_level:
+                elif (sum(history) / len(history)) == new_price_level:
 
                     ## Check if price is higher or lower
                     if announced_price > new_price:
@@ -883,18 +901,45 @@ while True:
         ## TX Tracker ##
         ################
 
-        if tx_to_check != "False" and interval_count % 10 == 0:
-            print("ill check txid")
-            if tx_checker(tx_to_check):
-                message = "Your TX is confirmed!"
-                log(message)
-                messages.append(message)
-                config.set(str(user["user_chat_id"]), 'tx_to_check', False)
-                write_config = True
-                user["tx_to_check"] = "False"
+        if tx_to_check != "confirmed" and interval_count % 10 == 0:
+
+            ## If TX is confirmed disable tracking and send message to user
+            tx_check = tx_checker(tx_to_check, "blockchair")
+            if tx_check[0] == "confirmed":
+                ## Write config
+                config.set(str(user["user_chat_id"]), 'tx_to_check', 'confirmed')
+                user["tx_to_check"] = "confirmed"
                 with open('config.cfg', 'w') as configfile:
                     config.write(configfile)
                     configfile.close()
+                ## Send message to user with block id
+                message = tx_check[1]
+                log(message)
+                messages.append(message)
+
+                ## Push messagess
+                log("Sending messages to the chat: " + str(user["username"]))
+                all_messages = ""
+                for x in messages:
+                    all_messages = all_messages + "\n" + x
+                send_message(user["user_chat_id"], all_messages)
+                messages = []
+
+            ## If TX is unconfirmed send user the position of his TX
+            ''' This Spams the chat - needs work
+            if tx_check[0] == "unconfirmed":
+                message = tx_check[1]
+                log(message)
+                messages.append(message)
+
+            ## Push messagess
+            log("Sending messages to the chat: " + str(user["username"]))
+            all_messages = ""
+            for x in messages:
+                all_messages = all_messages + "\n" + x
+            send_message(user["user_chat_id"], all_messages)
+            messages = []
+            '''
 
     #####################
     ## Chat monitoring ##
@@ -1473,19 +1518,38 @@ while True:
                         ## Listen for tx IDs
                         if len(splitted[0]) == 64:
                             tx_to_check = splitted[0]
-                            tx_confirmed = tx_checker(tx_to_check)
-                            if tx_confirmed:
-                                message = "Your TX is confirmed!"
+                            tx_status = tx_checker(tx_to_check, "blockchair")
+                            if tx_status[0] == "confirmed":
+                                message = tx_status[1]
                                 log(message)
                                 messages.append(message)
                             else:
                                 message = "Your TX is not confirmed yet. I will let you know when it is."
                                 log(message)
                                 messages.append(message)
+                                ## Look up position in queue
+                                message = tx_status[1]
+                                log(message)
+                                messages.append(message)
+                                ## Tell the user the /show_tx_position command
+                                message = "You can use /show_tx_position to get the up-to-date position of our tx in mempool"
+                                log(message)
+                                messages.append(message)
                                 ## Watch TX
                                 config.set(str(check_user), 'tx_to_check', tx_to_check)
                                 write_config = True
                                 userlist[find_user_index]["tx_to_check"] = tx_to_check
+
+                        if splitted[0] == "/show_tx_position":
+                            if tx_to_check == "confirmed":
+                                message = "No TX to check, please send me the TX hash."
+                                log(message)
+                                messages.append(message)
+                            else:
+                                tx_status = tx_checker(tx_to_check, "blockchair")
+                                message = tx_status[1]
+                                log(message)
+                                messages.append(message)
 
                         #####################
                         ## End of commands ##
